@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "Courtside",
-    "slug": "courtside",
-    "scheme": "courtside",
+    "name": "The Pickle Slot",
+    "slug": "the-pickle-slot",
+    "scheme": "thepickleslot",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -14,14 +14,14 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.courtside.app"
+      "bundleIdentifier": "com.thepickleslot.app"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#6200EA"
       },
-      "package": "com.courtside.app"
+      "package": "com.thepickleslot.app"
     },
     "web": {
       "favicon": "./assets/favicon.png",

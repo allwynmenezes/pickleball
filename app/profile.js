@@ -13,13 +13,13 @@ export default function ProfileScreen() {
       <Screen>
         <SectionTitle first>Profile</SectionTitle>
         <Card>
-          <Hint style={{ marginTop: 0 }}>Courtside is shared by your whole group rather than tied to any one account — there's no login. This page holds app-wide settings.</Hint>
+          <Hint style={{ marginTop: 0 }}>The Pickle Slot is shared by your whole group rather than tied to any one account — there's no login. This page holds app-wide settings.</Hint>
         </Card>
         <SectionTitle>Data</SectionTitle>
         <Card>
           <Btn
             title="Reset all data" variant="ghost" small dangerText
-            onPress={() => showConfirm('Erase all Courtside data for this group? This cannot be undone.', () => { resetAllData(); router.back(); })}
+            onPress={() => showConfirm('Erase all The Pickle Slot data for this group? This cannot be undone.', () => { resetAllData(); router.back(); })}
           />
         </Card>
         <Btn title="Close" variant="ghost" onPress={() => router.back()} style={{ marginTop: 8 }} />

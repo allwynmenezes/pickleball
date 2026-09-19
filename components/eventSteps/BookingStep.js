@@ -17,7 +17,7 @@ export default function BookingStep({ ev }) {
       <View>
         <SectionTitle first>Court booking plan</SectionTitle>
         <Card>
-          <Text style={styles.hint}>Since the club only allows 2-hour bookings per person, Courtside works out how many separate bookings are needed to cover the event, court by court, based on who's confirmed so far.</Text>
+          <Text style={styles.hint}>Since the club only allows 2-hour bookings per person, The Pickle Slot works out how many separate bookings are needed to cover the event, court by court, based on who's confirmed so far.</Text>
           <Btn title="Compute booking plan" onPress={() => recalcBooking(ev)} style={{ marginTop: 10 }} />
         </Card>
       </View>

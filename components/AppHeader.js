@@ -25,7 +25,7 @@ export default function AppHeader() {
           <View style={styles.markPill} />
           <View style={styles.markDot} />
         </View>
-        <Text style={styles.word}>COURT<Text style={{ color: colors.ball }}>SIDE</Text></Text>
+        <Text style={styles.word}>THE PICKLE <Text style={{ color: colors.ball }}>SLOT</Text></Text>
       </View>
       <Pressable onPress={() => router.push('/profile')} style={styles.profileBtn}>
         <Ionicons name="person" size={18} color={colors.courtDeep} />
