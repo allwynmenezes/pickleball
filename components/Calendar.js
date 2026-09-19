@@ -16,6 +16,7 @@ export default function Calendar({ cursor, onShift, events, selectedDate, onSele
   const cells = [];
   for (let i = 0; i < startWeekday; i++) cells.push(null);
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+  while (cells.length % 7 !== 0) cells.push(null);
 
   const eventsByDate = {};
   events.forEach(e => { (eventsByDate[e.date] = eventsByDate[e.date] || []).push(e); });
