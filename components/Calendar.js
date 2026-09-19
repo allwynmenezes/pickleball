@@ -75,13 +75,13 @@ export default function Calendar({ cursor, onShift, events, selectedDate, onSele
 }
 
 const styles = StyleSheet.create({
-  head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
-  monthLabel: { fontWeight: '600', fontSize: 15, color: colors.ink },
-  navBtn: { width: 30, height: 30, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
+  head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  monthLabel: { fontWeight: '700', fontSize: 13, color: colors.ink },
+  navBtn: { width: 24, height: 24, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
   weekRow: { flexDirection: 'row' },
-  wd: { flex: 1, textAlign: 'center', fontSize: 10, fontWeight: '700', color: colors.slate, textTransform: 'uppercase', marginBottom: 4 },
-  cell: { flex: 1, aspectRatio: 1, margin: 1.5, alignItems: 'center', justifyContent: 'center' },
+  wd: { flex: 1, textAlign: 'center', fontSize: 9, fontWeight: '700', color: colors.slate, textTransform: 'uppercase', marginBottom: 3 },
+  cell: { flex: 1, aspectRatio: 1, margin: 1, alignItems: 'center', justifyContent: 'center' },
   cellTouchable: { borderRadius: radius.sm },
-  dayNum: { fontSize: 12.5, color: colors.ink },
-  dot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: colors.court, marginTop: 2 },
+  dayNum: { fontSize: 11, color: colors.ink },
+  dot: { width: 4, height: 4, borderRadius: 2, backgroundColor: colors.court, marginTop: 2 },
 });
