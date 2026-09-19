@@ -78,7 +78,7 @@ export default function EventsScreen() {
   ) : null;
 
   const emptyBlock = (!selectedDate && events.length === 0) ? (
-    <Card><EmptyState icon="calendar">No events yet — use the + button to create one.</EmptyState></Card>
+    <Card><EmptyState icon="calendar">No events yet — use the New Event button to create one.</EmptyState></Card>
   ) : null;
 
   return (
@@ -108,7 +108,8 @@ export default function EventsScreen() {
         onPress={() => router.push({ pathname: '/event/[id]', params: { id: 'new', date: selectedDate || undefined } })}
         style={({ pressed, hovered }) => [styles.fab, (pressed || hovered) && styles.fabPressed]}
       >
-        <Ionicons name="add" size={26} color="#fff" />
+        <Ionicons name="add" size={20} color="#fff" />
+        <Text style={styles.fabText}>New Event</Text>
       </Pressable>
     </View>
   );
@@ -125,10 +126,12 @@ const styles = StyleSheet.create({
   calCardWide: { padding: 14 },
   fab: {
     position: 'absolute', right: 20, bottom: 90,
-    width: 56, height: 56, borderRadius: 28,
-    backgroundColor: colors.court, alignItems: 'center', justifyContent: 'center',
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    height: 52, borderRadius: 26, paddingHorizontal: 20,
+    backgroundColor: colors.court,
     shadowColor: '#320078', shadowOpacity: 0.3, shadowRadius: 10, shadowOffset: { width: 0, height: 4 },
     elevation: 6,
   },
   fabPressed: { backgroundColor: colors.courtDeep },
+  fabText: { color: '#fff', fontSize: 14.5, fontWeight: '700' },
 });
