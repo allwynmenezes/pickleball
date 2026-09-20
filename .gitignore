@@ -1,0 +1,10 @@
+# Claude Code local tool state (worktrees, etc.) — not project source
+.claude/
+
+# Backend runtime data
+backend/data.sqlite
+backend/node_modules/
+
+# Env files
+.env
+.env.local
