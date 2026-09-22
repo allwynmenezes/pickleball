@@ -13,6 +13,7 @@ fs.rmSync(TEST_DB, { force: true });
 process.env.PICKLE_DB_PATH = TEST_DB;
 
 const { app } = require('../server');
+const { db } = require('../db');
 
 function buildSamplePlayers() {
   return [
@@ -132,6 +133,7 @@ async function main() {
   });
 
   server.close();
+  db.close();
   fs.rmSync(TEST_DB, { force: true });
 
   if (failures) {

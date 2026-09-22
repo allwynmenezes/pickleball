@@ -1,9 +1,11 @@
 # Claude Code local tool state (worktrees, etc.) — not project source
 .claude/
 
+# Dependencies (run npm install; see package-lock.json)
+node_modules/
+
 # Backend runtime data
 backend/data.sqlite
-backend/node_modules/
 
 # Env files
 .env
