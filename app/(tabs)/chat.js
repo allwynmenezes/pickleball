@@ -1,28 +1,37 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, Platform, KeyboardAvoidingView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Picker } from '@react-native-picker/picker';
-import { Screen, SectionTitle, Card, Btn, Row, EmptyState, Hint, GenderDot } from '../../lib/ui';
+import { Screen, SectionTitle, Card, Btn, Row, EmptyState, Hint, GenderDot, Pill, TextField } from '../../lib/ui';
+import { useRouter } from 'expo-router';
 import {
-  useStore, getState, getChatAsId, setChatAsId, startChat, sendChatMessage, playerName, playerGender,
+  useStore, startChat, sendChatMessage, playerName, playerGender,
 } from '../../lib/store';
+import { useAuth } from '../../lib/auth';
+import { pushOnce } from '../../lib/nav';
 import { showAlert } from '../../lib/confirm';
 import { colors, radius } from '../../lib/theme';
 
 export default function ChatScreen() {
+  const router = useRouter();
   const players = useStore(s => s.players);
-  const chats = useStore(s => s.chats);
-  const asIdLive = useStore(() => getChatAsId());
+  const allChats = useStore(s => s.chats);
+  // You always chat as the logged-in account, and only see your own chats.
+  const { player: me } = useAuth();
+  const asIdLive = me ? me.id : null;
+  const chats = allChats.filter(c => c.participantIds.includes(asIdLive));
   const [activeChatId, setActiveChatId] = useState(null);
   const [composerType, setComposerType] = useState(null); // 'dm' | 'group' | null
   const [picked, setPicked] = useState([]);
   const [groupName, setGroupName] = useState('');
   const [draft, setDraft] = useState('');
 
-  if (players.length === 0) {
+  if (!me) {
     return (
       <Screen>
-        <EmptyState icon="people">Add players first, from the Players tab, before starting a chat.</EmptyState>
+        <EmptyState icon="chatbubble-ellipses">
+          <Text style={styles.emptyText}>Log in to chat with your group.</Text>
+          <Btn title="Log in" small onPress={() => pushOnce(router, '/login')} style={{ marginTop: 12, alignSelf: 'center' }} />
+        </EmptyState>
       </Screen>
     );
   }
@@ -56,9 +65,9 @@ export default function ChatScreen() {
           <View style={styles.composerRow}>
             <TextInput
               value={draft} onChangeText={setDraft} placeholder="Message…" style={styles.composerInput}
-              onSubmitEditing={() => { sendChatMessage(activeChat.id, draft); setDraft(''); }}
+              onSubmitEditing={() => { sendChatMessage(asIdLive, activeChat.id, draft); setDraft(''); }}
             />
-            <Btn title="Send" small onPress={() => { sendChatMessage(activeChat.id, draft); setDraft(''); }} />
+            <Btn title="Send" small onPress={() => { sendChatMessage(asIdLive, activeChat.id, draft); setDraft(''); }} />
           </View>
         </Screen>
       </KeyboardAvoidingView>
@@ -66,29 +75,20 @@ export default function ChatScreen() {
   }
 
   function submitNewChat() {
-    const others = players.filter(p => p.id !== asIdLive);
     if (picked.length === 0) { showAlert('Pick at least one other person to chat with.'); return; }
-    const { chatId, error } = startChat(composerType, picked, groupName);
+    const { chatId, error } = startChat(asIdLive, composerType, picked, groupName);
     if (error) { showAlert(error); return; }
     setActiveChatId(chatId);
     setComposerType(null); setPicked([]); setGroupName('');
   }
 
-  const others = players.filter(p => p.id !== asIdLive);
+  // Only people with an account can read and reply, so only they're offered.
+  const others = players.filter(p => p.claimed && p.id !== asIdLive);
 
   return (
     <Screen>
-      <SectionTitle first>Chatting as</SectionTitle>
-      <Card>
-        <View style={styles.pickerWrap}>
-          <Picker selectedValue={asIdLive} onValueChange={setChatAsId}>
-            {players.map(p => <Picker.Item key={p.id} label={p.name} value={p.id} />)}
-          </Picker>
-        </View>
-        <Hint>Pick who you are on this device — there are no logins, so this choice is just for this visit.</Hint>
-      </Card>
-
-      <SectionTitle>Conversations</SectionTitle>
+      <SectionTitle first>Conversations</SectionTitle>
+      <Hint style={{ marginTop: -6, marginBottom: 10 }}>Chatting as {me.name}.</Hint>
       {chats.length === 0 ? (
         <Card><EmptyState icon="chatbubble-ellipses">No conversations yet — start one below.</EmptyState></Card>
       ) : (
@@ -100,8 +100,11 @@ export default function ChatScreen() {
             const otherId = c.participantIds.find(id => id !== asIdLive);
             return (
               <Row key={c.id} onPress={() => setActiveChatId(c.id)}>
-                {c.type === 'group' ? <Ionicons name="people" size={18} color={colors.slate} /> : <GenderDot gender={playerGender(otherId)} />}
-                <Text style={styles.convLabel} numberOfLines={1}>{label}</Text>
+                {c.type === 'group' ? <Ionicons name="people" size={18} color={colors.slate} /> : null}
+                <View style={styles.convLabelRow}>
+                  <Text style={styles.convLabel} numberOfLines={1}>{label}</Text>
+                  {c.type === 'group' ? null : <GenderDot gender={playerGender(otherId)} />}
+                </View>
                 <Text style={styles.convLast} numberOfLines={1}>{last ? last.text : 'No messages yet'}</Text>
               </Row>
             );
@@ -109,7 +112,7 @@ export default function ChatScreen() {
         </Card>
       )}
 
-      <View style={styles.pillRow}>
+      <View style={styles.actionRow}>
         <Btn title="New 1:1 chat" icon="person" variant="outline" small onPress={() => { setComposerType('dm'); setPicked([]); }} />
         <Btn title="New group chat" icon="people" variant="outline" small onPress={() => { setComposerType('group'); setPicked([]); setGroupName(''); }} />
       </View>
@@ -119,24 +122,23 @@ export default function ChatScreen() {
           <SectionTitle>{composerType === 'group' ? 'New group chat' : 'New 1:1 chat'}</SectionTitle>
           <Card>
             {composerType === 'group' ? (
-              <TextInput value={groupName} onChangeText={setGroupName} placeholder="Group name (optional)" style={styles.input} />
+              <TextField value={groupName} onChangeText={setGroupName} placeholder="Group name (optional)" />
             ) : null}
             <Text style={[styles.hintLabel, { marginTop: composerType === 'group' ? 10 : 0 }]}>With</Text>
             <View style={styles.pillRow}>
-              {others.length === 0 ? <Text style={styles.hintLabel}>No other players yet.</Text> : others.map(p => {
+              {others.length === 0 ? <Text style={styles.hintLabel}>No one else has an account yet.</Text> : others.map(p => {
                 const isPicked = picked.includes(p.id);
                 return (
-                  <Pressable
+                  <Pill
                     key={p.id}
+                    label={p.name}
+                    active={isPicked}
                     onPress={() => setPicked(isPicked ? picked.filter(id => id !== p.id) : [...picked, p.id])}
-                    style={[styles.toggle, isPicked && { backgroundColor: colors.court, borderColor: colors.court }]}
-                  >
-                    <Text style={[styles.toggleText, isPicked && { color: '#fff' }]}>{p.name}</Text>
-                  </Pressable>
+                  />
                 );
               })}
             </View>
-            <View style={[styles.pillRow, { marginTop: 12 }]}>
+            <View style={[styles.actionRow, { marginTop: 12 }]}>
               <Btn title="Start chat" onPress={submitNewChat} />
               <Btn title="Cancel" variant="ghost" onPress={() => setComposerType(null)} />
             </View>
@@ -148,22 +150,21 @@ export default function ChatScreen() {
 }
 
 const styles = StyleSheet.create({
-  pickerWrap: { borderWidth: 1, borderColor: colors.line, borderRadius: radius.sm, marginBottom: 4, overflow: 'hidden' },
-  convLabel: { fontWeight: '600', fontSize: 14, flex: 1, color: colors.ink },
+  emptyText: { color: colors.slate, fontSize: 13, textAlign: 'center' },
+  convLabelRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, minWidth: 0 },
+  convLabel: { fontWeight: '600', fontSize: 14, flexShrink: 1, color: colors.ink },
   convLast: { fontSize: 12, color: colors.slate, maxWidth: 130 },
   pillRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginTop: 4 },
-  toggle: { paddingVertical: 7, paddingHorizontal: 13, borderRadius: 20, borderWidth: 1, borderColor: colors.line, backgroundColor: '#fff' },
-  toggleText: { fontSize: 12, fontWeight: '700', color: colors.slate },
+  actionRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginTop: 4, justifyContent: 'flex-end' },
   hintLabel: { fontSize: 11.5, color: colors.slate, fontWeight: '600', textTransform: 'uppercase', marginBottom: 6 },
-  input: { borderWidth: 1, borderColor: colors.line, borderRadius: radius.sm, padding: 9, fontSize: 14, backgroundColor: '#fff' },
   backBtn: { width: 32, height: 32, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
   threadTitle: { fontWeight: '600', fontSize: 15, color: colors.ink },
   bubble: { padding: 10, borderRadius: 14, marginBottom: 8, maxWidth: '80%' },
   bubbleMine: { backgroundColor: colors.court, alignSelf: 'flex-end' },
   bubbleTheirs: { backgroundColor: colors.courtTint, alignSelf: 'flex-start' },
   bubbleSender: { fontSize: 10, fontWeight: '700', opacity: 0.7, marginBottom: 2, color: colors.ink },
-  bubbleTextMine: { color: '#fff', fontSize: 13.5 },
+  bubbleTextMine: { color: colors.white, fontSize: 13.5 },
   bubbleTextTheirs: { color: colors.ink, fontSize: 13.5 },
   composerRow: { flexDirection: 'row', gap: 8, marginTop: 10, alignItems: 'center' },
-  composerInput: { flex: 1, borderWidth: 1, borderColor: colors.line, borderRadius: radius.sm, padding: 9, fontSize: 14, backgroundColor: '#fff' },
+  composerInput: { flex: 1, borderWidth: 1, borderColor: colors.line, borderRadius: radius.sm, padding: 9, fontSize: 14, backgroundColor: colors.white },
 });

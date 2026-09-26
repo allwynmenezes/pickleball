@@ -5,12 +5,14 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { hydrate, isHydrated } from '../lib/store';
+import { hydrateAuth } from '../lib/auth';
 import { ConfirmModalHost } from '../lib/ui';
+import AppHeader from '../components/AppHeader';
 import { colors } from '../lib/theme';
 
 export default function RootLayout() {
   const [ready, setReady] = useState(isHydrated());
-  useEffect(() => { hydrate().then(() => setReady(true)); }, []);
+  useEffect(() => { Promise.all([hydrate(), hydrateAuth()]).then(() => setReady(true)); }, []);
 
   if (!ready) {
     return (
@@ -20,12 +22,22 @@ export default function RootLayout() {
     );
   }
 
+  /* The header lives outside the Stack so it stays put while pushed pages
+     (event flow, profile, login, claim) slide in underneath it, rather than
+     each page drawing its own header over the whole screen. */
   const stack = (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="(tabs)" />
-      <Stack.Screen name="event/[id]" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
-      <Stack.Screen name="profile" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
-    </Stack>
+    <View style={{ flex: 1 }}>
+      <AppHeader />
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.chalk } }}>
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="event/[id]" options={{ animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="profile" options={{ animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="login" options={{ animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="signup" options={{ animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="forgot-password" options={{ animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="claim/[token]" options={{ animation: 'slide_from_bottom' }} />
+      </Stack>
+    </View>
   );
 
   return (

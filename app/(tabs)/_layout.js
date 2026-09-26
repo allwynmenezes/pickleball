@@ -2,7 +2,6 @@ import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { View, StyleSheet } from 'react-native';
-import AppHeader from '../../components/AppHeader';
 import { colors } from '../../lib/theme';
 
 const ICONS = {
@@ -16,9 +15,9 @@ export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={({ route }) => ({
-        header: () => <AppHeader />,
+        headerShown: false,
         tabBarActiveTintColor: colors.courtDeep,
-        tabBarInactiveTintColor: '#8FA79D',
+        tabBarInactiveTintColor: colors.courtTint,
         tabBarStyle: styles.tabBar,
         tabBarItemStyle: styles.tabBarItem,
         tabBarLabelStyle: styles.tabBarLabel,
@@ -39,9 +38,9 @@ export default function TabsLayout() {
 const styles = StyleSheet.create({
   tabBar: {
     position: 'absolute', left: 14, right: 14, bottom: 14,
-    backgroundColor: colors.courtDeep, borderRadius: 18, borderTopWidth: 0,
+    backgroundColor: colors.court, borderRadius: 18, borderTopWidth: 0,
     height: 62, paddingBottom: 6, paddingTop: 6,
-    shadowColor: '#320078', shadowOpacity: 0.25, shadowRadius: 10, shadowOffset: { width: 0, height: 4 },
+    shadowColor: colors.courtDeep, shadowOpacity: 0.25, shadowRadius: 10, shadowOffset: { width: 0, height: 4 },
     elevation: 8,
   },
   tabBarItem: { borderRadius: 14, marginHorizontal: 4 },

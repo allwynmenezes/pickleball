@@ -1,11 +1,48 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { SectionTitle, Card, Btn, Banner, EmptyState, Hint } from '../../lib/ui';
-import CourtLine from '../../components/CourtLine';
-import { getConfirmedAndWaitlist, fmtClock, offsetToClock } from '../../lib/engine';
-import { previewRoster, publishRoster, useStore, playerNameGender } from '../../lib/store';
+import { SectionTitle, Card, Btn, Banner, EmptyState, Hint, BigNum, GenderDot, LockedNote, Checkbox } from '../../lib/ui';
+import { MODE_LABEL } from '../../components/CourtLine';
+import { getConfirmedAndWaitlist, fmtClock, offsetToClock, gameLen, segmentGameLen } from '../../lib/engine';
+import { previewRoster, publishRoster, useStore, playerNameGender, playerName, playerGender, courtLabel, setSwitchAfterWarmup } from '../../lib/store';
 
 import { colors } from '../../lib/theme';
+
+function MatchupRow({ ev, court, offset }) {
+  return (
+    <View style={styles.matchWrap}>
+      <View style={styles.matchHead}>
+        <Text style={styles.courtNo}>{courtLabel(ev, court.court, offset)}</Text>
+        <Text style={styles.courtMeta}>({MODE_LABEL[court.mode]}{court.flagged ? ' · fallback' : ''})</Text>
+      </View>
+      <View style={styles.matchRow}>
+        <View style={styles.teamLeft}>
+          {court.teamA.map(id => (
+            <View key={id} style={styles.teamItemLeft}>
+              <Text style={styles.teamNameLeft} numberOfLines={1}>{playerName(id)}</Text>
+              <GenderDot gender={playerGender(id)} size={16} />
+            </View>
+          ))}
+        </View>
+        <Text style={styles.vs}>vs</Text>
+        <View style={styles.teamRight}>
+          {court.teamB.map(id => (
+            <View key={id} style={styles.teamItemRight}>
+              <Text style={styles.teamNameRight} numberOfLines={1}>{playerName(id)}</Text>
+              <GenderDot gender={playerGender(id)} size={16} />
+            </View>
+          ))}
+        </View>
+      </View>
+      {court.flagged ? <Banner>Not enough eligible players for the planned mode — this court fell back to any combination.</Banner> : null}
+    </View>
+  );
+}
+
+function roundLenLabel(ev) {
+  const lens = Array.from(new Set((ev.segments || []).map(s => segmentGameLen(ev, s))));
+  if (lens.length <= 1) return `rounds (${lens[0] || gameLen(ev)} min each)`;
+  return `rounds (${lens.join(' / ')} min, by segment)`;
+}
 
 export default function RosterStep({ ev }) {
   const players = useStore(s => s.players);
@@ -20,15 +57,28 @@ export default function RosterStep({ ev }) {
 
   return (
     <View>
+      {ev.started ? <LockedNote /> : null}
       <Card>
         <View style={styles.pillRow}>
-          <Btn title={ev.roster ? 'Regenerate' : 'Generate roster'} variant="outline" onPress={() => previewRoster(ev)} />
-          {ev.roster ? <Btn title={ev.published ? 'Re-publish' : 'Publish roster'} onPress={() => publishRoster(ev)} /> : null}
+          <Btn title={ev.roster ? 'Regenerate' : 'Generate roster'} variant="outline" disabled={!!ev.started} onPress={() => previewRoster(ev)} />
+          {ev.roster ? <Btn title={ev.published ? 'Re-publish' : 'Publish roster'} disabled={!!ev.started} onPress={() => publishRoster(ev)} /> : null}
         </View>
         <Hint>
           {ev.published
-            ? "Published — rounds already played or announced (before the current round on the Games step) are always kept exactly as they happened; regenerating only rebuilds what's left, and scores can only be entered from the Games step."
+            ? "Published — rounds already played or announced (before the current round on the Rounds step) are always kept exactly as they happened; regenerating only rebuilds what's left, and scores can only be entered from the Rounds step."
             : 'Preview freely; nothing counts toward pairing history until you publish.'}
+        </Hint>
+        <Checkbox
+          label="Switch players after warm-up"
+          checked={!!ev.switchAfterWarmup}
+          onChange={(v) => setSwitchAfterWarmup(ev, v)}
+          disabled={!!ev.started}
+          style={{ marginTop: 10 }}
+        />
+        <Hint style={{ marginTop: 2 }}>
+          {ev.switchAfterWarmup
+            ? 'The round after warm-up gets fresh pairings.'
+            : 'The round after warm-up keeps the exact warm-up games (same partners and opponents), as long as everyone is still available.'}
         </Hint>
       </Card>
 
@@ -39,9 +89,9 @@ export default function RosterStep({ ev }) {
           <SectionTitle>Overview</SectionTitle>
           <Card lift>
             <View style={styles.grid3}>
-              <View><Text style={styles.bignum}>{totalGames}</Text><Text style={styles.meta}>games scheduled</Text></View>
-              <View><Text style={styles.bignum}>{ev.roster.length}</Text><Text style={styles.meta}>rounds (15 min each)</Text></View>
-              <View><Text style={styles.bignum}>{flaggedCount}</Text><Text style={styles.meta}>mode fallbacks</Text></View>
+              <BigNum value={totalGames} label="games scheduled" />
+              <BigNum value={ev.roster.length} label={roundLenLabel(ev)} />
+              <BigNum value={flaggedCount} label="mode fallbacks" />
             </View>
             {sitOutRounds.length ? <Banner>{sitOutRounds.length} round(s) have 1–3 players left over without a full court (uneven headcount) — see rounds marked below.</Banner> : null}
           </Card>
@@ -53,8 +103,8 @@ export default function RosterStep({ ev }) {
               idx === (ev.currentRoundIndex || 0) && ev.published && styles.roundCurrent,
               ev.published && idx < (ev.currentRoundIndex || 0) && styles.roundPlayed,
             ]}>
-              <Text style={styles.roundHead}>{idx === 0 ? 'Warm-up · ' : ''}{fmtClock(offsetToClock(ev, r.offset))}</Text>
-              {r.courts.map(c => <CourtLine key={c.court} court={c} roundIdx={idx} editable={false} />)}
+              <Text style={styles.roundHead}>{idx === 0 ? 'Warm-up · ' : ''}{fmtClock(offsetToClock(ev, r.offset))}{r.repeatsWarmup ? <Text style={styles.roundNote}> · same players as warm-up</Text> : null}</Text>
+              {r.courts.map(c => <MatchupRow key={c.court} ev={ev} court={c} offset={r.offset} />)}
               {r.sitOut && r.sitOut.length ? <Hint>Left over this round: {r.sitOut.map(id => playerNameGender(id)).join(', ')}</Hint> : null}
             </View>
           ))}
@@ -65,12 +115,23 @@ export default function RosterStep({ ev }) {
 }
 
 const styles = StyleSheet.create({
-  pillRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  pillRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' },
   grid3: { flexDirection: 'row', justifyContent: 'space-between' },
-  bignum: { fontWeight: '700', fontSize: 28, color: colors.courtDeep },
-  meta: { fontSize: 11, color: colors.slate },
-  roundBlock: { borderWidth: 1, borderColor: colors.line, borderRadius: 10, padding: 13, marginBottom: 10, backgroundColor: '#fff' },
-  roundCurrent: { borderColor: colors.ball, backgroundColor: colors.ballTint },
+  roundBlock: { borderWidth: 1, borderColor: colors.line, borderRadius: 10, padding: 13, marginBottom: 10, backgroundColor: colors.white },
+  roundCurrent: { borderColor: colors.court, backgroundColor: colors.courtTint },
   roundPlayed: { opacity: 0.55 },
   roundHead: { fontWeight: '600', fontSize: 14, marginBottom: 8, color: colors.ink },
+  roundNote: { fontWeight: '400', color: colors.slate, fontSize: 12 },
+  matchWrap: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.line, gap: 6 },
+  matchHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  courtNo: { fontWeight: '600', color: colors.ink, fontSize: 13 },
+  courtMeta: { fontSize: 12, color: colors.slate },
+  matchRow: { flexDirection: 'row', alignItems: 'center' },
+  teamLeft: { flex: 1, gap: 3 },
+  teamRight: { flex: 1, gap: 3 },
+  teamItemLeft: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  teamItemRight: { flexDirection: 'row', alignItems: 'center', gap: 5, justifyContent: 'flex-end' },
+  teamNameLeft: { fontSize: 13, color: colors.ink },
+  teamNameRight: { fontSize: 13, color: colors.ink, textAlign: 'right' },
+  vs: { color: colors.slate, fontSize: 10, fontWeight: '700', textTransform: 'uppercase', marginHorizontal: 8 },
 });

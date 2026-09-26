@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useRouter, usePathname } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../lib/theme';
@@ -11,6 +11,7 @@ import { colors } from '../lib/theme';
    on the right is an opaque chip that reads fine wherever it lands. */
 export default function AppHeader() {
   const router = useRouter();
+  const pathname = usePathname();
   const insets = useSafeAreaInsets();
   return (
     <LinearGradient
@@ -27,7 +28,10 @@ export default function AppHeader() {
         </View>
         <Text style={styles.word}>THE PICKLE <Text style={{ color: colors.ball }}>SLOT</Text></Text>
       </View>
-      <Pressable onPress={() => router.push('/profile')} style={styles.profileBtn}>
+      {/* navigate (not push): if Profile is already open underneath — e.g.
+          you went Profile → Log in — this returns to it instead of stacking
+          a second copy. */}
+      <Pressable onPress={() => { if (pathname !== '/profile') router.navigate('/profile'); }} style={styles.profileBtn}>
         <Ionicons name="person" size={18} color={colors.courtDeep} />
       </Pressable>
     </LinearGradient>
@@ -42,8 +46,8 @@ const styles = StyleSheet.create({
   brandrow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   mark: { width: 26, height: 26, alignItems: 'center', justifyContent: 'center' },
   markPill: { position: 'absolute', left: 0, top: 2, width: 15, height: 22, borderRadius: 7.5, backgroundColor: colors.ball },
-  markDot: { position: 'absolute', right: 0, bottom: 0, width: 9, height: 9, borderRadius: 4.5, backgroundColor: '#fff', borderWidth: 1.2, borderColor: colors.courtDeep },
-  word: { fontWeight: '700', fontSize: 21, letterSpacing: 0.5, color: '#fff' },
+  markDot: { position: 'absolute', right: 0, bottom: 0, width: 9, height: 9, borderRadius: 4.5, backgroundColor: colors.white, borderWidth: 1.2, borderColor: colors.courtDeep },
+  word: { fontWeight: '700', fontSize: 21, letterSpacing: 0.5, color: colors.white },
   profileBtn: {
     width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(255,255,255,0.92)',
     alignItems: 'center', justifyContent: 'center',

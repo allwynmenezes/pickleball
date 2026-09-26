@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Platform, Pressable, useWindowDimensions } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { Screen, SectionTitle, Card, Btn, Row, Badge, EmptyState } from '../../lib/ui';
-import Calendar from '../../components/Calendar';
+import { pushOnce } from '../../lib/nav';
+import { Screen, SectionTitle, Card, Row, Badge, EmptyState, BoldPlus } from '../../lib/ui';
+import Calendar, { CalendarLegend } from '../../components/Calendar';
 import { useStore } from '../../lib/store';
+import { useAuth } from '../../lib/auth';
+import { showConfirm } from '../../lib/confirm';
 import { fmtClock } from '../../lib/engine';
 import { colors } from '../../lib/theme';
 
@@ -17,6 +19,7 @@ function fmtDateLong(dateStr) {
 
 export default function EventsScreen() {
   const router = useRouter();
+  const { player: me } = useAuth();
   const events = useStore(s => s.events);
   const { width } = useWindowDimensions();
   const isWideWeb = Platform.OS === 'web' && width >= WIDE_BREAKPOINT;
@@ -37,6 +40,7 @@ export default function EventsScreen() {
   const calendarBlock = (
     <Card style={isWideWeb ? styles.calCardWide : null}>
       <Calendar cursor={cursor} onShift={shift} events={events} selectedDate={selectedDate} onSelectDate={setSelectedDate} />
+      <CalendarLegend />
     </Card>
   );
 
@@ -45,19 +49,14 @@ export default function EventsScreen() {
       <SectionTitle first={isWideWeb}>{fmtDateLong(selectedDate)}</SectionTitle>
       <Card>
         {dayEvents.length === 0 ? (
-          <Text style={styles.emptyHint}>No events on this day yet.</Text>
+          <Text style={styles.emptyHint}>No events on this day yet. Tap <Text style={styles.emptyHintStrong}>+ New Event</Text> to create one.</Text>
         ) : dayEvents.map(e => (
-          <Row key={e.id} onPress={() => router.push({ pathname: '/event/[id]', params: { id: e.id } })}>
+          <Row key={e.id} onPress={() => pushOnce(router, { pathname: '/event/[id]', params: { id: e.id } })}>
             <Text style={styles.name} numberOfLines={1}>{e.name}</Text>
             <Badge label={e.published ? 'Published' : 'Draft'} kind={e.published ? 'ok' : 'wait'} />
             <Text style={styles.meta}>{fmtClock(e.startTime)}</Text>
           </Row>
         ))}
-        <Btn
-          title="New event on this day" icon="add" variant="outline" small
-          style={{ marginTop: dayEvents.length ? 10 : 0 }}
-          onPress={() => router.push({ pathname: '/event/[id]', params: { id: 'new', date: selectedDate } })}
-        />
       </Card>
     </View>
   ) : null;
@@ -67,7 +66,7 @@ export default function EventsScreen() {
       <SectionTitle first={isWideWeb && !selectedDate}>All events</SectionTitle>
       <Card>
         {sortedAll.map(e => (
-          <Row key={e.id} onPress={() => router.push({ pathname: '/event/[id]', params: { id: e.id } })}>
+          <Row key={e.id} onPress={() => pushOnce(router, { pathname: '/event/[id]', params: { id: e.id } })}>
             <Text style={styles.name} numberOfLines={1}>{e.name}</Text>
             <Badge label={e.published ? 'Published' : 'Draft'} kind={e.published ? 'ok' : 'wait'} />
             <Text style={styles.meta}>{e.date}</Text>
@@ -105,10 +104,16 @@ export default function EventsScreen() {
       </Screen>
 
       <Pressable
-        onPress={() => router.push({ pathname: '/event/[id]', params: { id: 'new', date: selectedDate || undefined } })}
+        onPress={() => {
+          if (!me) {
+            showConfirm("Log in to create an event — you'll be its host, the only one who can edit or delete it.", () => pushOnce(router, '/login'), 'Log in');
+            return;
+          }
+          pushOnce(router, { pathname: '/event/[id]', params: { id: 'new', date: selectedDate || undefined } });
+        }}
         style={({ pressed, hovered }) => [styles.fab, (pressed || hovered) && styles.fabPressed]}
       >
-        <Ionicons name="add" size={20} color="#fff" />
+        <BoldPlus size={20} color={colors.courtTint} />
         <Text style={styles.fabText}>New Event</Text>
       </Pressable>
     </View>
@@ -120,6 +125,7 @@ const styles = StyleSheet.create({
   name: { fontWeight: '600', fontSize: 14, flex: 1, color: colors.ink },
   meta: { fontSize: 12, color: colors.slate },
   emptyHint: { fontSize: 13, color: colors.slate },
+  emptyHintStrong: { fontWeight: '700', color: colors.court },
   webRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 20 },
   webCalCol: { width: 300 },
   webListCol: { flex: 1, minWidth: 0 },
@@ -127,11 +133,13 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute', right: 20, bottom: 90,
     flexDirection: 'row', alignItems: 'center', gap: 8,
-    height: 52, borderRadius: 26, paddingHorizontal: 20,
+    // A fully-rounded capsule: radius larger than half the height, so the
+    // ends are true semicircles with no flat run where the curve meets.
+    height: 48, borderRadius: 999, paddingLeft: 18, paddingRight: 22,
     backgroundColor: colors.court,
-    shadowColor: '#320078', shadowOpacity: 0.3, shadowRadius: 10, shadowOffset: { width: 0, height: 4 },
+    shadowColor: colors.courtDeep, shadowOpacity: 0.3, shadowRadius: 10, shadowOffset: { width: 0, height: 4 },
     elevation: 6,
   },
   fabPressed: { backgroundColor: colors.courtDeep },
-  fabText: { color: '#fff', fontSize: 14.5, fontWeight: '700' },
+  fabText: { color: colors.courtTint, fontSize: 14.5, fontWeight: '700' },
 });

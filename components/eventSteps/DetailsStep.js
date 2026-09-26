@@ -1,6 +1,6 @@
 import React from 'react';
-import { View, Text, TextInput, StyleSheet } from 'react-native';
-import { SectionTitle, Card, Hint, EmptyState, Field, GenderDot, Badge } from '../../lib/ui';
+import { View, Text, StyleSheet } from 'react-native';
+import { SectionTitle, Card, Hint, EmptyState, TextField, GenderDot, Badge, BigNum } from '../../lib/ui';
 import { getHist } from '../../lib/engine';
 import { useStore, setFlagThreshold } from '../../lib/store';
 import { colors } from '../../lib/theme';
@@ -35,21 +35,16 @@ export default function DetailsStep() {
     <View>
       <SectionTitle first>Rolling coverage across {sessionCount} published session(s)</SectionTitle>
       <Card lift>
-        <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
-          <Text style={styles.bignum}>{relDone}</Text>
-          <Text style={styles.meta}>of {relTotal} partner+opponent relationships completed</Text>
-        </View>
+        <BigNum value={relDone} label={`of ${relTotal} partner+opponent relationships completed`} />
         <Hint>{fullyCovered} pairs fully covered (partnered and opposed at least once) · {partial} partially · {none} not yet.</Hint>
       </Card>
 
       <SectionTitle>Nudge threshold</SectionTitle>
       <Card>
-        <Field label="Flag a pair after this many sessions with zero games together">
-          <TextInput
-            value={String(flagThreshold)} keyboardType="number-pad" style={styles.input}
-            onChangeText={setFlagThreshold}
-          />
-        </Field>
+        <TextField
+          label="Flag a pair after this many sessions with zero games together"
+          value={String(flagThreshold)} keyboardType="number-pad" onChangeText={setFlagThreshold}
+        />
       </Card>
 
       <SectionTitle>Pairs to steer toward ({flagged.length})</SectionTitle>
@@ -59,7 +54,7 @@ export default function DetailsStep() {
         ) : flagged.map(([a, b], i) => (
           <View key={i} style={styles.flagline}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <GenderDot gender={a.gender} /><Text>{a.name}</Text><Text> & </Text><GenderDot gender={b.gender} /><Text>{b.name}</Text>
+              <Text>{a.name}</Text><GenderDot gender={a.gender} /><Text> & </Text><Text>{b.name}</Text><GenderDot gender={b.gender} />
             </View>
             <Badge label="never matched" kind="flag" />
           </View>
@@ -82,8 +77,6 @@ export default function DetailsStep() {
 }
 
 const styles = StyleSheet.create({
-  bignum: { fontWeight: '700', fontSize: 32, color: colors.courtDeep },
   meta: { fontSize: 12, color: colors.slate },
-  input: { borderWidth: 1, borderColor: colors.line, borderRadius: 7, padding: 9, fontSize: 14, backgroundColor: '#fff' },
   flagline: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.line },
 });

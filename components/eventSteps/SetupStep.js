@@ -1,62 +1,108 @@
 import React from 'react';
-import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { SectionTitle, Card, Field, Hint, Btn, Row, GenderDot, GenderChip, EmptyState } from '../../lib/ui';
-import { showAlert } from '../../lib/confirm';
+import { SectionTitle, Card, Field, TextField, DateField, Hint, Btn, Row, GenderChip, EmptyState, Select, Pill } from '../../lib/ui';
+import { TimeWheelField, WheelSelectField } from '../WheelPicker';
+import { showAlert, showConfirm } from '../../lib/confirm';
 import {
-  updateEventField, normalizeSegments, addSegment, removeSegment, updateSegment, updateSegmentMode,
-  addPlayerToEvent, addAllPlayersToEvent, addNewPlayerToEvent, removePlayerFromEvent, useStore, getPlayerById,
+  updateEventField, normalizeSegments, addSegment, removeSegment, updateSegment, updateSegmentMode, updateSegmentGameLen,
+  addPlayerToEvent, addAllPlayersToEvent, addNewPlayerToEvent, removeEventPlayer, useStore, getPlayerById, editPlayer,
+  courtLabelForRange, checkpointEventFlow, playerName,
 } from '../../lib/store';
-import { fmtClock, offsetToClock } from '../../lib/engine';
+import { fmtClock, offsetToClock, toOffset, timeOptions, gameLen, segmentGameLen } from '../../lib/engine';
 import { colors, radius } from '../../lib/theme';
+
+const GENDERS = [{ label: 'Male', value: 'M' }, { label: 'Female', value: 'F' }, { label: 'Other', value: 'O' }];
 
 const MODES = [
   { key: 'open', label: 'Any combination' },
   { key: 'men', label: "Men's only" },
   { key: 'women', label: "Women's only" },
   { key: 'mixed', label: 'Mixed' },
+  { key: 'break', label: 'Break (no games)' },
 ];
 
 function ModeSelect({ value, onChange }) {
   return (
-    <View style={styles.modeSelectWrap}>
-      <Picker selectedValue={value} onValueChange={onChange} style={styles.modeSelect} itemStyle={styles.modeSelectItem}>
-        {MODES.map(m => <Picker.Item key={m.key} label={m.label} value={m.key} />)}
-      </Picker>
-    </View>
+    <Select
+      value={value} onValueChange={onChange}
+      items={MODES.map(m => ({ label: m.label, value: m.key }))}
+      style={{ flex: 1 }}
+    />
   );
 }
 
-export default function SetupStep({ ev, onDeleteEvent }) {
+/* Numeric fields that clamp/coerce their value (see updateEventField) must
+   not push that clamped value back into the TextInput on every keystroke —
+   clearing the field to type a new number would otherwise immediately snap
+   back to "1". So the typed text is buffered and committed on blur — and
+   also when the field goes away while still focused (tapping Done or
+   swiping to another step doesn't blur it first, which used to drop the
+   last edit). The text resyncs whenever the committed value changes. */
+function useBufferedNumber(committed, commit) {
+  const [text, setText] = React.useState(String(committed));
+  const latest = React.useRef(null);
+  latest.current = { text, committed, commit };
+  React.useEffect(() => { setText(String(committed)); }, [committed]);
+  React.useEffect(() => () => {
+    const { text: t, committed: c, commit: save } = latest.current;
+    if (t !== String(c)) save(t);
+  }, []);
+  return [text, setText, () => commit(text)];
+}
+
+function NumberField({ label, ev, field, value }) {
+  const [text, setText, onBlur] = useBufferedNumber(value, (t) => updateEventField(ev, field, t));
+  return <TextField label={label} value={text} onChangeText={setText} onBlur={onBlur} keyboardType="number-pad" />;
+}
+
+/* Per-segment game length: shows the effective value (the event's, unless
+   this segment overrides it). */
+function SegmentGameLenField({ ev, idx, seg }) {
+  const [text, setText, onBlur] = useBufferedNumber(segmentGameLen(ev, seg), (t) => updateSegmentGameLen(ev, idx, t));
+  return <TextField label="Game length (min)" value={text} onChangeText={setText} onBlur={onBlur} keyboardType="number-pad" />;
+}
+
+/* Setup opens read-only. Only the event's host (the account that created
+   it) gets an Edit button — and with it Delete, which lives in edit mode.
+   The server enforces the same rule on every save.
+   Done keeps the edits for good: it makes them part of the saved event, so
+   the event's Cancel (or backing out) no longer undoes them. */
+
+export default function SetupStep({ ev, onDeleteEvent, canEdit, active }) {
+  const [editing, setEditing] = React.useState(false);
+  const [saveOnClose, setSaveOnClose] = React.useState(false);
+  // Leaving the Setup page always ends editing.
+  React.useEffect(() => { if (!active) setEditing(false); }, [active]);
+  // Runs after the form has unmounted, i.e. after any still-focused field
+  // has committed its last value.
+  React.useEffect(() => {
+    if (saveOnClose && !editing) { checkpointEventFlow(ev.id); setSaveOnClose(false); }
+  }, [saveOnClose, editing]);
   normalizeSegments(ev);
+  if (!editing || !canEdit || ev.started) return <SetupSummary ev={ev} canEdit={canEdit && !ev.started} onEdit={() => setEditing(true)} />;
   const courtOpts = Array.from({ length: ev.courts }, (_, i) => i + 1);
 
   return (
     <View>
+      <View style={styles.modeBar}>
+        <Text style={styles.modeBarText}>Editing setup</Text>
+        <Btn title="Done" icon="checkmark" small onPress={() => { setSaveOnClose(true); setEditing(false); }} />
+      </View>
       <SectionTitle first>Event</SectionTitle>
-      <Card>
-        <Field label="Event name">
-          <TextInput value={ev.name} onChangeText={(v) => updateEventField(ev, 'name', v)} style={styles.input} />
-        </Field>
-        <View style={styles.grid2}>
-          <Field label="Date">
-            <TextInput value={ev.date} onChangeText={(v) => updateEventField(ev, 'date', v)} placeholder="YYYY-MM-DD" style={styles.input} />
-          </Field>
-          <Field label="Start time">
-            <TextInput value={ev.startTime} onChangeText={(v) => updateEventField(ev, 'startTime', v)} placeholder="HH:MM" style={styles.input} />
-          </Field>
+      <Card style={styles.fieldStack}>
+        <TextField label="Event name" value={ev.name} onChangeText={(v) => updateEventField(ev, 'name', v)} />
+        <View style={styles.fieldRow}>
+          <DateField label="Date" value={ev.date} onChange={(v) => updateEventField(ev, 'date', v)} />
+          <TimeWheelField label="Start time" value={ev.startTime} onChange={(v) => updateEventField(ev, 'startTime', v)} />
         </View>
-        <View style={styles.grid2}>
-          <Field label="Total duration (min)">
-            <TextInput value={String(ev.durationMin)} onChangeText={(v) => updateEventField(ev, 'durationMin', v)} keyboardType="number-pad" style={styles.input} />
-          </Field>
-          <Field label="Courts available">
-            <TextInput value={String(ev.courts)} onChangeText={(v) => updateEventField(ev, 'courts', v)} keyboardType="number-pad" style={styles.input} />
-          </Field>
+        <View style={styles.fieldRow}>
+          <NumberField label="Total duration (min)" ev={ev} field="durationMin" value={ev.durationMin} />
+          <NumberField label="Courts available" ev={ev} field="courts" value={ev.courts} />
         </View>
-        <Hint>Capacity is {ev.courts * 4} players (courts × 4). Game length is fixed at 15 min; the first game doubles as warm-up. Ends at {fmtClock(offsetToClock(ev, ev.durationMin))}.</Hint>
-        <Btn title="Delete event" icon="trash" variant="ghost" small dangerText onPress={onDeleteEvent} style={{ marginTop: 10 }} />
+        <NumberField label="Game length (min per round)" ev={ev} field="gameLenMin" value={gameLen(ev)} />
+        <Hint style={{ marginTop: 0 }}>Capacity is {ev.courts * 4} players (courts × 4). Each round is {gameLen(ev)} min unless a segment below sets its own game length; the first game doubles as warm-up. Ends at {fmtClock(offsetToClock(ev, ev.durationMin))}.</Hint>
+        <Btn title="Delete event" icon="trash" variant="ghost" small dangerText onPress={onDeleteEvent} style={{ alignSelf: 'flex-end' }} />
       </Card>
 
       <SectionTitle>Match-mode segments</SectionTitle>
@@ -65,35 +111,127 @@ export default function SetupStep({ ev, onDeleteEvent }) {
         {ev.segments.map((s, idx) => {
           const isLast = idx === ev.segments.length - 1;
           return (
-            <View key={idx} style={styles.segBar}>
+            <React.Fragment key={idx}>
+            {idx > 0 ? <View style={styles.segDivider} /> : null}
+            <View style={styles.segBar}>
               <View style={styles.grid2}>
-                <Field label="Starts at"><Text style={styles.disabledInput}>{s.start}</Text></Field>
-                <Field label={isLast ? 'Ends at (fixed to event end)' : 'Ends at'}>
-                  {isLast ? <Text style={styles.disabledInput}>{s.end}</Text> : (
-                    <TextInput value={s.end} onChangeText={(v) => updateSegment(ev, idx, 'end', v)} placeholder="HH:MM" style={styles.input} />
-                  )}
-                </Field>
+                <Field label="Starts at"><Text style={styles.disabledInput}>{fmtClock(s.start)}</Text></Field>
+                {isLast ? (
+                  <Field label="Ends at (fixed to event end)"><Text style={styles.disabledInput}>{fmtClock(s.end)}</Text></Field>
+                ) : (
+                  <WheelSelectField
+                    label="Ends at" value={s.end} onValueChange={(v) => updateSegment(ev, idx, 'end', v)}
+                    items={timeOptions(ev, toOffset(ev, s.end))
+                      .filter(o => o.offset > toOffset(ev, s.start))
+                      .map(o => ({ label: o.label, value: o.clock }))}
+                  />
+                )}
+              </View>
+              <View style={styles.segLenRow}>
+                <SegmentGameLenField ev={ev} idx={idx} seg={s} />
+                <Hint style={styles.segLenHint}>
+                  {s.gameLenMin ? `Overrides the event's ${gameLen(ev)} min` : `Event default (${gameLen(ev)} min)`}
+                </Hint>
               </View>
               <Text style={styles.smallLabel}>Mode per court</Text>
-              <View style={styles.pillRow}>
+              <View style={styles.courtModeList}>
                 {courtOpts.map(c => (
                   <View key={c} style={styles.courtModeItem}>
-                    <Text style={styles.courtModeLabel}>Ct {c}</Text>
+                    <Text style={styles.courtModeLabel}>{courtLabelForRange(ev, c, toOffset(ev, s.start), toOffset(ev, s.end))}</Text>
                     <ModeSelect value={(s.modes || {})[c] || 'open'} onChange={(v) => updateSegmentMode(ev, idx, c, v)} />
                   </View>
                 ))}
               </View>
-              <Pressable onPress={() => { const r = removeSegment(ev, idx); if (r.error) showAlert(r.error); }}>
-                <Text style={styles.removeLink}>Remove segment</Text>
-              </Pressable>
+              <Btn
+                title="Remove segment" icon="trash" variant="ghost" small dangerText
+                onPress={() => { const r = removeSegment(ev, idx); if (r.error) showAlert(r.error); }}
+                style={{ marginTop: 6, alignSelf: 'flex-end' }}
+              />
             </View>
+            </React.Fragment>
           );
         })}
-        <Btn title="Add segment" variant="outline" small onPress={() => { const r = addSegment(ev); if (r.error) showAlert(r.error); }} />
+        <View style={styles.segDivider} />
+        <Btn title="Add segment" variant="outline" small onPress={() => { const r = addSegment(ev); if (r.error) showAlert(r.error); }} style={{ alignSelf: 'flex-end' }} />
         <Hint>If a Mixed or single-gender court can't be filled with the players actually available, that court falls back to "any combination" for the affected time and gets flagged in the roster.</Hint>
       </Card>
 
       <EventMembers ev={ev} />
+    </View>
+  );
+}
+
+function SetupSummary({ ev, canEdit, onEdit }) {
+  const players = useStore(s => s.players);
+  const members = (ev.memberIds || []).map(getPlayerById).filter(Boolean);
+  const courtOpts = Array.from({ length: ev.courts }, (_, i) => i + 1);
+  const dateLabel = new Date(ev.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+  const modeLabel = (k) => (MODES.find(m => m.key === k) || MODES[0]).label;
+
+  return (
+    <View>
+      <View style={styles.modeBar}>
+        {canEdit ? (
+          <>
+            <Text style={styles.modeBarText}>Event setup</Text>
+            <Btn title="Edit" icon="create-outline" variant="outline" small onPress={onEdit} />
+          </>
+        ) : (
+          <Hint style={{ marginTop: 0, flex: 1 }}>
+            {ev.started
+              ? 'Games have started — setup is read-only.'
+              : `Only the host${ev.createdBy ? `, ${playerName(ev.createdBy)},` : ''} can edit or delete this event.`}
+          </Hint>
+        )}
+      </View>
+
+      <SectionTitle first>Event</SectionTitle>
+      <Card>
+        <Text style={styles.summaryName}>{ev.name}</Text>
+        <InfoRow label="Host" value={ev.createdBy ? playerName(ev.createdBy) : '—'} />
+        <InfoRow label="Date" value={dateLabel} />
+        <InfoRow label="Time" value={`${fmtClock(ev.startTime)} – ${fmtClock(offsetToClock(ev, ev.durationMin))} (${ev.durationMin} min)`} />
+        <InfoRow label="Courts" value={`${ev.courts} (capacity ${ev.courts * 4} players)`} />
+        <InfoRow label="Game length" value={`${gameLen(ev)} min per round (default)`} last />
+      </Card>
+
+      <SectionTitle>Match-mode segments</SectionTitle>
+      <Card>
+        {ev.segments.map((s, idx) => (
+          <React.Fragment key={idx}>
+          {idx > 0 ? <View style={styles.segDivider} /> : null}
+          <View style={styles.summarySeg}>
+            <Text style={styles.summarySegTime}>{fmtClock(s.start)} – {fmtClock(s.end)} · {segmentGameLen(ev, s)} min games</Text>
+            {courtOpts.map(c => (
+              <Text key={c} style={styles.summarySegMode}>
+                {courtLabelForRange(ev, c, toOffset(ev, s.start), toOffset(ev, s.end))} · {modeLabel((s.modes || {})[c] || 'open')}
+              </Text>
+            ))}
+          </View>
+          </React.Fragment>
+        ))}
+      </Card>
+
+      <SectionTitle>Players in this event ({members.length})</SectionTitle>
+      <Card>
+        {members.length === 0 ? <EmptyState icon="people">No players added to this event yet.</EmptyState> : members.map(p => (
+          <Row key={p.id}>
+            <View style={styles.memberNameRow}>
+              <Text style={styles.memberName} numberOfLines={1}>{p.name}</Text>
+              <GenderChip gender={p.gender} />
+            </View>
+          </Row>
+        ))}
+      </Card>
+    </View>
+  );
+}
+
+function InfoRow({ label, value, last }) {
+  return (
+    <View style={[styles.infoRow, last && { borderBottomWidth: 0 }]}>
+      <Text style={styles.infoLabel}>{label}</Text>
+      <Text style={styles.infoValue}>{value}</Text>
     </View>
   );
 }
@@ -103,75 +241,109 @@ function EventMembers({ ev }) {
   const [name, setName] = React.useState('');
   const [gender, setGender] = React.useState('M');
   const [pickedExisting, setPickedExisting] = React.useState('');
+  const [editingId, setEditingId] = React.useState(null);
+  const [editName, setEditName] = React.useState('');
+  const [editGender, setEditGender] = React.useState('M');
+
+  function startEdit(p) { setEditingId(p.id); setEditName(p.name); setEditGender(p.gender); }
+  function saveEdit() { editPlayer(editingId, editName, editGender); setEditingId(null); }
 
   const memberIds = ev.memberIds || [];
   const members = memberIds.map(getPlayerById).filter(Boolean);
-  const nonMembers = players.filter(p => !memberIds.includes(p.id));
+  // Only account players can be pulled in from outside this event.
+  const nonMembers = players.filter(p => p.claimed && !memberIds.includes(p.id));
+
+  function onRemove(p) {
+    if (p.claimed) { removeEventPlayer(ev, p.id); return; }
+    showConfirm(`Delete ${p.name}? They were added just for this event, so this also clears their RSVP and any court they claimed here.`, () => removeEventPlayer(ev, p.id), 'Delete');
+  }
 
   return (
     <View>
       <SectionTitle>Players in this event ({members.length})</SectionTitle>
-      <Hint style={{ marginTop: -6, marginBottom: 10 }}>Only players added here show up in this event's RSVP and scheduling — removing someone here only takes them out of this event, never the standalone Players list.</Hint>
+      <Hint style={{ marginTop: -6, marginBottom: 10 }}>Only players added here show up in this event's RSVP and scheduling. Players with an account can only be removed from this event. Players added just for this event can be edited or deleted — until they claim their spot from the RSVP invite link.</Hint>
       <Card>
-        {members.length === 0 ? <EmptyState icon="people">No players added to this event yet — add some below.</EmptyState> : members.map(p => (
+        {members.length === 0 ? <EmptyState icon="people">No players added to this event yet — add some below.</EmptyState> : members.map(p => editingId === p.id ? (
+          <View key={p.id} style={styles.editingRow}>
+            <TextField value={editName} onChangeText={setEditName} autoFocus />
+            <View style={styles.genderRow}>
+              {GENDERS.map(g => (
+                <Pill key={g.value} label={g.label} active={editGender === g.value} onPress={() => setEditGender(g.value)} />
+              ))}
+            </View>
+            <View style={styles.editActions}>
+              <Pressable onPress={saveEdit} style={styles.iconBtn}><Ionicons name="checkmark-circle" size={18} color={colors.court} /></Pressable>
+              <Pressable onPress={() => setEditingId(null)} style={styles.iconBtn}><Ionicons name="close" size={18} color={colors.slate} /></Pressable>
+            </View>
+          </View>
+        ) : (
           <Row key={p.id}>
-            <GenderDot gender={p.gender} />
-            <Text style={styles.memberName} numberOfLines={1}>{p.name}</Text>
-            <GenderChip gender={p.gender} />
-            <Pressable onPress={() => removePlayerFromEvent(ev, p.id)} style={styles.removeBtn}>
-              <Ionicons name="close" size={15} color={colors.clay} />
-            </Pressable>
+            <View style={styles.memberNameRow}>
+              <Text style={styles.memberName} numberOfLines={1}>{p.name}</Text>
+              <GenderChip gender={p.gender} />
+            </View>
+            {p.claimed ? null : (
+              <Pressable onPress={() => startEdit(p)} style={styles.iconBtn}><Ionicons name="pencil" size={15} color={colors.slate} /></Pressable>
+            )}
+            <Pressable onPress={() => onRemove(p)} style={styles.iconBtn}><Ionicons name="trash" size={15} color={colors.clay} /></Pressable>
           </Row>
         ))}
       </Card>
       <Card>
         {nonMembers.length ? (
           <View>
-            <Text style={styles.smallLabel}>Add an existing player to this event</Text>
+            <Text style={styles.smallLabel}>Add a player with an account</Text>
             <View style={styles.addExistingRow}>
-              <View style={styles.pickerWrap}>
-                <Picker selectedValue={pickedExisting} onValueChange={setPickedExisting}>
-                  <Picker.Item label="Choose…" value="" />
-                  {nonMembers.map(p => <Picker.Item key={p.id} label={`${p.name} (${p.gender})`} value={p.id} />)}
-                </Picker>
-              </View>
+              <Select
+                value={pickedExisting} onValueChange={setPickedExisting} placeholder="Choose…"
+                items={nonMembers.map(p => ({ label: `${p.name} (${p.gender})`, value: p.id }))}
+              />
               <Btn title="Add" small onPress={() => { if (pickedExisting) { addPlayerToEvent(ev, pickedExisting); setPickedExisting(''); } }} />
             </View>
-            <Btn title={`Add all ${nonMembers.length} remaining`} variant="ghost" small onPress={() => addAllPlayersToEvent(ev)} style={{ marginTop: 8 }} />
+            <Btn title={`Add all ${nonMembers.length} remaining`} variant="ghost" small onPress={() => addAllPlayersToEvent(ev)} style={{ marginTop: 8, alignSelf: 'flex-end' }} />
           </View>
-        ) : <Hint style={{ marginTop: 0 }}>Every player in your standalone list is already part of this event.</Hint>}
-        <Hint>Or add a brand-new player (this also adds them to your standalone Players list):</Hint>
+        ) : <Hint style={{ marginTop: 0 }}>Everyone with an account is already part of this event.</Hint>}
+        <Hint>Or add a player just for this event — a name only, not an account. They can claim it later from the RSVP invite link:</Hint>
         <View style={styles.grid2}>
-          <Field label="Name"><TextInput value={name} onChangeText={setName} placeholder="Player name" style={styles.input} /></Field>
-          <Field label="Category">
-            <View style={styles.pickerWrap}>
-              <Picker selectedValue={gender} onValueChange={setGender}>
-                <Picker.Item label="Male" value="M" /><Picker.Item label="Female" value="F" /><Picker.Item label="Other" value="O" />
-              </Picker>
-            </View>
-          </Field>
+          <TextField label="Name" value={name} onChangeText={setName} placeholder="Player name" />
+          <Select
+            label="Category" value={gender} onValueChange={setGender}
+            items={GENDERS}
+          />
         </View>
-        <Btn title="Add" icon="add" onPress={() => { if (name.trim()) { addNewPlayerToEvent(ev, name, gender); setName(''); } }} style={{ marginTop: 10 }} />
+        <Btn title="Add" icon="add" onPress={() => { if (name.trim()) { addNewPlayerToEvent(ev, name, gender); setName(''); } }} style={{ marginTop: 10, alignSelf: 'flex-end' }} />
       </Card>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  input: { borderWidth: 1, borderColor: colors.line, borderRadius: radius.sm, padding: 9, fontSize: 14, backgroundColor: '#fff' },
   disabledInput: { borderWidth: 1, borderColor: colors.line, borderRadius: radius.sm, padding: 9, fontSize: 14, backgroundColor: colors.chalk, color: colors.slate },
   grid2: { flexDirection: 'row', gap: 10, marginBottom: 10 },
-  segBar: { borderLeftWidth: 3, borderLeftColor: colors.court, paddingLeft: 12, marginBottom: 14 },
+  fieldStack: { gap: 10 },
+  modeBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 14 },
+  modeBarText: { fontSize: 13, fontWeight: '600', color: colors.slate },
+  summaryName: { fontSize: 16, fontWeight: '700', color: colors.ink, marginBottom: 6 },
+  infoRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.line },
+  infoLabel: { fontSize: 12.5, color: colors.slate, fontWeight: '600' },
+  infoValue: { fontSize: 13.5, color: colors.ink, flexShrink: 1, textAlign: 'right' },
+  summarySeg: { borderLeftWidth: 3, borderLeftColor: colors.court, paddingLeft: 12, gap: 3 },
+  segDivider: { height: 1, backgroundColor: colors.line, marginVertical: 14 },
+  segLenRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, marginBottom: 12 },
+  segLenHint: { flex: 1, marginTop: 0, marginBottom: 10 },
+  summarySegTime: { fontSize: 14, fontWeight: '600', color: colors.ink, marginBottom: 2 },
+  summarySegMode: { fontSize: 13, color: colors.slate },
+  fieldRow: { flexDirection: 'row', gap: 10 },
+  segBar: { borderLeftWidth: 3, borderLeftColor: colors.court, paddingLeft: 12, marginBottom: 4 },
   smallLabel: { fontSize: 11.5, color: colors.slate, fontWeight: '600', textTransform: 'uppercase', marginBottom: 6 },
-  pillRow: { flexDirection: 'row', gap: 7, flexWrap: 'wrap' },
-  courtModeItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  courtModeLabel: { fontSize: 12 },
-  modeSelectWrap: { borderWidth: 1, borderColor: colors.line, borderRadius: 20, overflow: 'hidden', minWidth: 130 },
-  modeSelect: { height: 36 },
-  modeSelectItem: { fontSize: 12 },
-  removeLink: { color: colors.clay, fontSize: 12, fontWeight: '600', marginTop: 6 },
-  memberName: { fontWeight: '600', fontSize: 14, flex: 1, color: colors.ink },
-  removeBtn: { width: 30, height: 30, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
+  courtModeList: { gap: 8 },
+  courtModeItem: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  courtModeLabel: { fontSize: 12.5, color: colors.ink, width: 78 },
+  memberNameRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 0 },
+  memberName: { fontWeight: '600', fontSize: 14, flexShrink: 1, color: colors.ink },
+  iconBtn: { width: 30, height: 30, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.line, backgroundColor: colors.white },
+  editingRow: { backgroundColor: colors.ballTint, borderRadius: radius.sm, padding: 10, marginVertical: 4, gap: 8 },
+  genderRow: { flexDirection: 'row', gap: 8 },
+  editActions: { flexDirection: 'row', gap: 6, justifyContent: 'flex-end' },
   addExistingRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-  pickerWrap: { flex: 1, borderWidth: 1, borderColor: colors.line, borderRadius: radius.sm, overflow: 'hidden' },
 });

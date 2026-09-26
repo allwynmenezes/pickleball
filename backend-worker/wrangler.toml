@@ -1,0 +1,13 @@
+# Cloudflare Worker for The Pickle Slot's API (free plan: Workers + D1).
+# database_id comes from `npx wrangler d1 create pickle-slot`.
+# Secrets are set with `npx wrangler secret put <NAME>`, never stored here:
+#   APPS_SCRIPT_URL, APPS_SCRIPT_SECRET   OTP email delivery (see backend/email/)
+#   MIGRATION_TOKEN                       only while importing data, then delete
+name = "the-pickle-slot"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "pickle-slot"
+database_id = "699c6368-86ac-4a16-bd7b-f11034340f59"

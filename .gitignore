@@ -10,3 +10,7 @@ backend/data.sqlite
 # Env files
 .env
 .env.local
+
+# Generated native projects (expo prebuild / run:android)
+/android
+/ios
