@@ -19,5 +19,6 @@ database_id = "699c6368-86ac-4a16-bd7b-f11034340f59"
 binding = "AI"
 
 [vars]
+AI_USER_PER_MINUTE_LIMIT = "5" # requests per player per minute
 AI_USER_DAILY_LIMIT = "30"    # requests per player per day
 AI_TOTAL_DAILY_LIMIT = "150"  # whole app per day, under the free allowance

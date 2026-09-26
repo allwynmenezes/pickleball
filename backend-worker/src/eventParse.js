@@ -41,11 +41,37 @@ function num(s) {
 export function extractFromText(text, { now, tzOffsetMin = 0 } = {}) {
   const out = {};
   const ref = { instant: now ? new Date(now) : new Date(), timezone: tzOffsetMin };
+  // Numbers first. Each phrase found is then blanked out, so chrono doesn't
+  // also read "games of 20 minutes" as "20 minutes from now".
+  let rest = text;
+  const find = re => {
+    const m = rest.match(re);
+    if (m) rest = rest.replace(m[0], ' ');
+    return m;
+  };
+
+  // "for 3 hours", "for 90 minutes", "for an hour and a half", "for two
+  // and a half hours", or a bare "2hrs" (hours only — a bare "15 min" is
+  // usually the game length).
+  const HALF = '(\\s+and\\s+a\\s+half)?';
+  const game = find(new RegExp(`\\b${NUM}[\\s-]*(?:minutes?|mins?)[\\s-]+games?\\b`, 'i'))
+    || find(new RegExp(`\\bgames?\\s+(?:of|are|at)\\s+${NUM}\\s*(?:minutes?|mins?)\\b`, 'i'));
+  if (game) out.gameLenMin = num(game[1]);
+  const dur = find(new RegExp(`\\bfor\\s+${NUM}${HALF}\\s*(hours?|hrs?|h|minutes?|mins?)\\b${HALF}`, 'i'))
+    || find(new RegExp(`\\b${NUM}${HALF}\\s*(hours?|hrs?)\\b${HALF}`, 'i'));
+  const statedDuration = dur ? num(dur[1]) * (/^h/i.test(dur[3]) ? 60 : 1) + (dur[2] || dur[4] ? 30 : 0) : undefined;
+  const courts = find(new RegExp(`\\b${NUM}\\s+courts?\\b`, 'i'));
+  if (courts) out.courts = num(courts[1]);
 
   // Wording chrono misses: "7ish", "noon"/"midnight" inside a range
   // ("9 to noon" otherwise loses the 9), and short weekday names.
   const SHORT_DAYS = { tues: 'tuesday', weds: 'wednesday', thur: 'thursday', thurs: 'thursday' };
-  const cleaned = text
+  // Any other "15 minute" / "an hour" left is the length of something (a
+  // break, a segment), never a clock time — chrono would read it as "15
+  // minutes from now".
+  const cleaned = rest
+    .replace(new RegExp(`\\b${NUM}[\\s-]*(?:minutes?|mins?|hours?|hrs?)\\b`, 'gi'), ' ')
+    .replace(/\b(?:half|full|all)[\s-]day\b/gi, ' ') // "half day event" is not 10pm
     .replace(/(\d)\s*ish\b/gi, '$1')
     .replace(/\bnoon\b/gi, '12pm')
     .replace(/\bmidnight\b/gi, '12am')
@@ -54,7 +80,11 @@ export function extractFromText(text, { now, tzOffsetMin = 0 } = {}) {
   // Date and time. Skip results that are only a duration ("for 3 hours").
   const results = chrono.parse(cleaned, ref, { forwardDate: true })
     .filter(r => !/^\s*for\b/i.test(r.text));
-  const hit = results.find(r => r.start.isCertain('hour')) || null;
+  // Several times can turn up; the best is a range on a named day ("Oct 17
+  // from 9 till 1"), then any range, then any time.
+  const dayOf = r => r.start.isCertain('day') || r.start.isCertain('weekday');
+  const timed = results.filter(r => r.start.isCertain('hour'));
+  const hit = timed.find(r => r.end && dayOf(r)) || timed.find(r => r.end) || timed[0] || null;
   // "Friday night, 6:30 till 9" parses as two results: the day comes from
   // one and the time from the other.
   const dayHit = [hit, ...results].find(r => r && (r.start.isCertain('day') || r.start.isCertain('weekday')));
@@ -97,26 +127,13 @@ export function extractFromText(text, { now, tzOffsetMin = 0 } = {}) {
     }
   }
 
-  // "for 3 hours", "for 90 minutes", "for an hour and a half", "for two
-  // and a half hours", or a bare "2hrs" (hours only — a bare "15 min" is
-  // usually the game length).
-  const HALF = '(\\s+and\\s+a\\s+half)?';
-  const dur = text.match(new RegExp(`\\bfor\\s+${NUM}${HALF}\\s*(hours?|hrs?|h|minutes?|mins?)\\b${HALF}`, 'i'))
-    || text.match(new RegExp(`\\b${NUM}${HALF}\\s*(hours?|hrs?)\\b${HALF}(?![\\s-]*games?)`, 'i'));
-  if (dur) {
-    const isHours = /^h/i.test(dur[3]);
-    out.durationMin = num(dur[1]) * (isHours ? 60 : 1) + (dur[2] || dur[4] ? 30 : 0);
-  }
+  // A start-to-end range beats a stated length: in "men's doubles for an
+  // hour, then mixed, 3 to 6pm" the hour is one part of the evening.
+  if (out.durationMin === undefined && statedDuration !== undefined) out.durationMin = statedDuration;
 
-  const courts = text.match(new RegExp(`\\b${NUM}\\s+courts?\\b`, 'i'));
-  if (courts) out.courts = num(courts[1]);
-
-  // "15-minute games", "15 min games", "games of 12 minutes"
-  const game = text.match(new RegExp(`\\b${NUM}[\\s-]*(?:minutes?|mins?)[\\s-]+games?\\b`, 'i'))
-    || text.match(new RegExp(`\\bgames?\\s+(?:of|are|at)\\s+${NUM}\\s*(?:minutes?|mins?)\\b`, 'i'));
-  if (game) out.gameLenMin = num(game[1]);
-
-  return out;
+  // Keep the key order stable for callers and tests.
+  const { date, startTime, durationMin, courts: c, gameLenMin } = out;
+  return Object.fromEntries(Object.entries({ date, startTime, durationMin, courts: c, gameLenMin }).filter(([, v]) => v !== undefined));
 }
 
 /* ---- Pass 2: merge with the model's guesses and clamp ---- */
@@ -227,8 +244,20 @@ export function matchPlayers(names, players) {
    nothing event-like in it. `filled` lists the fields that came from the
    text, so the app can say what it filled in versus left as a default. */
 export function buildDraft(text, ai, players, opts = {}) {
+  // "What's the weather tomorrow" has a date in it, but it isn't an event.
+  // When the model says so, that's final. (Without the model — AI down —
+  // anything with a date or number still counts.)
+  if (ai && ai.isEvent === false) return null;
+  const today = opts.now ? opts.now.slice(0, 10) : new Date().toISOString().slice(0, 10);
   const fromText = extractFromText(text, opts);
   const model = fromModel(ai);
+  // The model sometimes guesses the wrong year for named days ("Christmas
+  // Eve"). Events are planned ahead, so a past date means the next one.
+  if (model.date && model.date < today) {
+    const sameDay = `${today.slice(0, 4)}${model.date.slice(4)}`;
+    const next = sameDay >= today ? sameDay : `${Number(today.slice(0, 4)) + 1}${model.date.slice(4)}`;
+    model.date = isDate(next) ? next : undefined;
+  }
   const pick = key => (fromText[key] !== undefined ? fromText[key] : model[key]);
 
   const filled = [];
@@ -239,7 +268,6 @@ export function buildDraft(text, ai, players, opts = {}) {
     return v;
   };
 
-  const today = opts.now ? opts.now.slice(0, 10) : new Date().toISOString().slice(0, 10);
   const date = take('date', today);
   const startTime = take('startTime', DEFAULTS.startTime);
   const durationMin = clamp(take('durationMin', DEFAULTS.durationMin), LIMITS.durationMin);

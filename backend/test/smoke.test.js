@@ -329,6 +329,11 @@ async function main() {
   res = await fetch(`${base}/api/reset`, { method: 'POST' });
   check('there is no reset endpoint', () => { assert.equal(res.status, 404); });
 
+  // 6. "Describe your event" is Worker-only; this backend says so clearly.
+  res = await fetch(`${base}/api/ai/parse-event`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"text":"Tuesday 6pm"}' });
+  body = await res.json();
+  check('describe-your-event explains it needs the Cloudflare backend', () => { assert.equal(res.status, 501); assert.match(body.error, /Cloudflare/); });
+
   server.close();
   db.close();
   fs.rmSync(TEST_DB, { force: true });

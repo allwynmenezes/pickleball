@@ -25,7 +25,6 @@ import { buildDraft, MODES } from './eventParse.js';
 // loose phrasing. About 60 neurons a request → ~160 a day on the free plan.
 const DEFAULT_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 const MAX_TEXT = 500;
-const PER_MINUTE = 5;
 
 const intVar = (v, fallback) => (Number.isFinite(parseInt(v, 10)) ? parseInt(v, 10) : fallback);
 
@@ -78,7 +77,7 @@ async function checkLimits(db, playerId, env) {
     db.prepare('SELECT COUNT(*) AS n FROM ai_calls WHERE playerId = ? AND ts >= ?').bind(playerId, dayStart),
     db.prepare('SELECT COUNT(*) AS n FROM ai_calls WHERE ts >= ?').bind(dayStart),
   ]);
-  if (minute.results[0].n >= PER_MINUTE) return 'Too many requests — wait a minute and try again.';
+  if (minute.results[0].n >= intVar(env.AI_USER_PER_MINUTE_LIMIT, 5)) return 'Too many requests — wait a minute and try again.';
   if (mine.results[0].n >= intVar(env.AI_USER_DAILY_LIMIT, 30)) return "You've reached today's limit for describing events. Fill in the form instead, or try again tomorrow.";
   if (all.results[0].n >= intVar(env.AI_TOTAL_DAILY_LIMIT, 150)) return 'Event descriptions are unavailable for the rest of today. Fill in the form instead.';
   // Count this call now, so failed or slow calls still use up the limit.

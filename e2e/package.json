@@ -1,0 +1,13 @@
+{
+  "name": "the-pickle-slot-e2e",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "serve": "serve -s web -l 5055 --no-clipboard",
+    "test": "node describe-event.mjs"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.55.0",
+    "serve": "^14.2.4"
+  }
+}

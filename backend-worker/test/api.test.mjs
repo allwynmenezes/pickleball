@@ -174,6 +174,21 @@ res = await post('/api/auth/signup/verify', { email: 'zed@example.com', otp: zed
 body = await res.json();
 check('plain sign-up creates a new account', () => { assert.equal(res.status, 200); assert.equal(body.player.name, 'Zed'); });
 
+// "Describe your event" (src/ai.js). One real Workers AI call per run; the
+// checked fields come from code parsing, so they hold even if AI is down.
+const zedToken = body.token;
+res = await post('/api/ai/parse-event', { text: 'Tuesday 6 to 9pm, 2 courts' });
+check('describing an event needs a signed-in player', () => assert.equal(res.status, 401));
+res = await post('/api/ai/parse-event', { text: ' ' }, { Authorization: `Bearer ${zedToken}` });
+check('an empty description is refused', () => assert.equal(res.status, 400));
+res = await post('/api/ai/parse-event', { text: 'Tuesday 6 to 9pm, 2 courts, with Ben', now: '2026-09-26T17:00:00.000Z', tzOffsetMin: -420 }, { Authorization: `Bearer ${zedToken}` });
+body = await res.json();
+check('a description comes back as a draft', () => {
+  assert.equal(res.status, 200);
+  assert.deepEqual([body.draft.date, body.draft.startTime, body.draft.durationMin, body.draft.courts], ['2026-09-29', '18:00', 180, 2]);
+});
+console.log(`        (model ${body.aiUsed ? 'answered' : 'unavailable — code parsing only'}${body.aiUsed ? `; players matched: ${body.draft.memberIds.join(', ') || 'none'}` : ''})`);
+
 res = await post('/api/admin/import', {}, { 'X-Migration-Token': 'anything' });
 check('import endpoint is hidden without MIGRATION_TOKEN', () => assert.equal(res.status, 404));
 

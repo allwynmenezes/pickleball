@@ -41,6 +41,18 @@ check('"two and a half hours" and bare "2hrs"', () => {
   assert.equal(x('Wednesday at 6 for two and a half hours').durationMin, 150);
   assert.equal(x('sunday 4pm 2hrs 3 courts').durationMin, 120);
 });
+check('"games of 20 minutes" is not read as a time', () => assert.deepEqual(
+  x('games of 20 minutes, 3 courts, next Friday 5 to 8'),
+  { date: '2026-10-02', startTime: '17:00', durationMin: 180, courts: 3, gameLenMin: 20 },
+));
+check('a time range beats a part\'s length; "a 15 minute break" is not a time', () => assert.deepEqual(
+  x("men's doubles for an hour, then a 15 minute break, then mixed. Saturday 3 to 6pm"),
+  { date: '2026-09-26', startTime: '15:00', durationMin: 180 },
+));
+check('"half day" is not a time; the dated range wins', () => assert.deepEqual(
+  x('half day event on Oct 17 from 9 till 1, 6 courts, women first 2 hours then mixed'),
+  { date: '2026-10-17', startTime: '09:00', durationMin: 240, courts: 6 },
+));
 check('"15 min games" is not a duration', () => assert.equal(x('Monday 6pm, 15 min games').durationMin, undefined));
 check('nothing event-like → empty', () => assert.deepEqual(x('what is the weather like'), {}));
 
@@ -87,6 +99,11 @@ check('values are clamped', () => {
 });
 check('everyone invited', () => assert.equal(buildDraft('Tuesday 6pm, everyone', { isEvent: true, inviteEveryone: true }, players, opts).draft.memberIds.length, 5));
 check('model says not an event and text has nothing → null', () => assert.equal(buildDraft('write me a poem', { isEvent: false, name: 'Poem', courts: 2 }, players, opts), null));
+check('model says not an event even though the text has a date → null', () => assert.equal(buildDraft('what is the weather like tomorrow', { isEvent: false }, players, opts), null));
+check('a past date from the model rolls forward to the next one', () => {
+  assert.equal(buildDraft('Christmas eve social', { isEvent: true, date: '2024-12-24' }, players, opts).draft.date, '2026-12-24');
+  assert.equal(buildDraft('New year social', { isEvent: true, date: '2026-01-01' }, players, opts).draft.date, '2027-01-01');
+});
 
 if (failures) { console.error(`\n${failures} failed`); process.exit(1); }
 console.log('\nall passed');
