@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Platform, InteractionManager } from 'react-native';
-import PagerView from 'react-native-pager-view';
+import PagerView from '../../components/StepPager';
 import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
 import { Screen, Card, Btn, TextField, DateField, Pill } from '../../lib/ui';
 import { TimeWheelField } from '../../components/WheelPicker';
