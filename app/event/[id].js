@@ -16,6 +16,7 @@ import BookingStep from '../../components/eventSteps/BookingStep';
 import RosterStep from '../../components/eventSteps/RosterStep';
 import RoundsStep from '../../components/eventSteps/RoundsStep';
 import DetailsStep from '../../components/eventSteps/DetailsStep';
+import AiEventComposer from '../../components/AiEventComposer';
 import { colors } from '../../lib/theme';
 
 const STEPS = [
@@ -122,6 +123,8 @@ export default function EventFlowScreen() {
       <View style={{ flex: 1, backgroundColor: colors.chalk }}>
         <Screen>
           <Text style={styles.title}>New event</Text>
+          {/* Fills the draft below; the user still checks it and taps Create. */}
+          <AiEventComposer onFill={(fields) => setDraft((d) => ({ ...d, ...fields }))} />
           <Card style={{ gap: 10 }}>
             <TextField label="Event name" value={draft.name} onChangeText={(v) => setDraft({ ...draft, name: v })} placeholder="e.g. Tuesday Night" autoFocus />
             <View style={styles.grid2}>
