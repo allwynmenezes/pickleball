@@ -33,6 +33,15 @@ check('uses the user\'s timezone, not the server\'s', () => {
   // 11pm Friday in UTC-7 is already Saturday in UTC.
   assert.equal(extractFromText('tomorrow 6pm', { now: '2026-09-25T23:00:00-07:00', tzOffsetMin: -420 }).date, '2026-09-26');
 });
+check('"9 to noon" keeps the morning start', () => assert.deepEqual(x('Saturday 9 to noon, 4 courts'), { date: '2026-09-26', startTime: '09:00', durationMin: 180, courts: 4 }));
+check('weekday after the time range', () => assert.deepEqual(x('night session 8pm to midnight on Friday'), { date: '2026-10-02', startTime: '20:00', durationMin: 240 }));
+check('"7ish" and "tmrw"', () => assert.deepEqual(x('tmrw 7ish till 10'), { date: '2026-09-27', startTime: '19:00', durationMin: 180 }));
+check('short weekday names', () => assert.equal(x('tues 6pm').date, '2026-09-29'));
+check('"two and a half hours" and bare "2hrs"', () => {
+  assert.equal(x('Wednesday at 6 for two and a half hours').durationMin, 150);
+  assert.equal(x('sunday 4pm 2hrs 3 courts').durationMin, 120);
+});
+check('"15 min games" is not a duration', () => assert.equal(x('Monday 6pm, 15 min games').durationMin, undefined));
 check('nothing event-like → empty', () => assert.deepEqual(x('what is the weather like'), {}));
 
 console.log('buildSegments');

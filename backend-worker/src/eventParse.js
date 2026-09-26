@@ -42,18 +42,31 @@ export function extractFromText(text, { now, tzOffsetMin = 0 } = {}) {
   const out = {};
   const ref = { instant: now ? new Date(now) : new Date(), timezone: tzOffsetMin };
 
+  // Wording chrono misses: "7ish", "noon"/"midnight" inside a range
+  // ("9 to noon" otherwise loses the 9), and short weekday names.
+  const SHORT_DAYS = { tues: 'tuesday', weds: 'wednesday', thur: 'thursday', thurs: 'thursday' };
+  const cleaned = text
+    .replace(/(\d)\s*ish\b/gi, '$1')
+    .replace(/\bnoon\b/gi, '12pm')
+    .replace(/\bmidnight\b/gi, '12am')
+    .replace(/\b(tues|weds|thurs?)\b/gi, m => SHORT_DAYS[m.toLowerCase()]);
+
   // Date and time. Skip results that are only a duration ("for 3 hours").
-  const results = chrono.parse(text, ref, { forwardDate: true })
+  const results = chrono.parse(cleaned, ref, { forwardDate: true })
     .filter(r => !/^\s*for\b/i.test(r.text));
-  const hit = results.find(r => r.start.isCertain('hour'))
-    || null;
+  const hit = results.find(r => r.start.isCertain('hour')) || null;
   // "Friday night, 6:30 till 9" parses as two results: the day comes from
   // one and the time from the other.
   const dayHit = [hit, ...results].find(r => r && (r.start.isCertain('day') || r.start.isCertain('weekday')));
-  if (dayHit) {
-    const s = dayHit.start;
-    out.date = `${s.get('year')}-${pad(s.get('month'))}-${pad(s.get('day'))}`;
+  let day = dayHit ? dayHit.start : null;
+  if (!day) {
+    // "8pm to midnight on Friday": chrono files the weekday under the end
+    // time. Read the weekday phrase on its own instead.
+    const wd = cleaned.match(/\b(?:(?:this|next)\s+(?:week\s+)?)?(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*\b/i);
+    const r = wd && chrono.parse(wd[0], ref, { forwardDate: true })[0];
+    if (r && (r.start.isCertain('weekday') || r.start.isCertain('day'))) day = r.start;
   }
+  if (day) out.date = `${day.get('year')}-${pad(day.get('month'))}-${pad(day.get('day'))}`;
   // Nobody means 6:30am by a bare "6:30" — 1 to 7 without am/pm is read as
   // the evening. "7am" or "morning" makes the meridiem certain and is kept.
   const clockOf = c => {
@@ -67,6 +80,13 @@ export function extractFromText(text, { now, tzOffsetMin = 0 } = {}) {
       out.startTime = clockOf(s);
       if (hit.end && hit.end.isCertain('hour')) {
         const endTime = clockOf(hit.end);
+        // "9 to 12pm": chrono guesses 9pm for the bare start. When the end is
+        // explicitly earlier in the day than that, the start was the morning
+        // one. (A bare end, as in "6:30 till 9", is handled below instead.)
+        const startMin = toMin(out.startTime);
+        if (!s.isCertain('meridiem') && hit.end.isCertain('meridiem') && startMin >= 780 && toMin(endTime) < startMin && toMin(endTime) > startMin - 720) {
+          out.startTime = toClock(startMin - 720);
+        }
         let d = toMin(endTime) - toMin(out.startTime);
         // "6:30 till 9" — a bare end hour before the start means 9pm, not
         // 9am the next day. Otherwise it genuinely runs past midnight.
@@ -77,11 +97,15 @@ export function extractFromText(text, { now, tzOffsetMin = 0 } = {}) {
     }
   }
 
-  // "for 3 hours", "for 90 minutes", "for an hour and a half"
-  const dur = text.match(new RegExp(`\\bfor\\s+${NUM}\\s*(hours?|hrs?|h|minutes?|mins?)\\b(\\s+and\\s+a\\s+half)?`, 'i'));
+  // "for 3 hours", "for 90 minutes", "for an hour and a half", "for two
+  // and a half hours", or a bare "2hrs" (hours only — a bare "15 min" is
+  // usually the game length).
+  const HALF = '(\\s+and\\s+a\\s+half)?';
+  const dur = text.match(new RegExp(`\\bfor\\s+${NUM}${HALF}\\s*(hours?|hrs?|h|minutes?|mins?)\\b${HALF}`, 'i'))
+    || text.match(new RegExp(`\\b${NUM}${HALF}\\s*(hours?|hrs?)\\b${HALF}(?![\\s-]*games?)`, 'i'));
   if (dur) {
-    const isHours = /^h/i.test(dur[2]);
-    out.durationMin = num(dur[1]) * (isHours ? 60 : 1) + (dur[3] ? 30 : 0);
+    const isHours = /^h/i.test(dur[3]);
+    out.durationMin = num(dur[1]) * (isHours ? 60 : 1) + (dur[2] || dur[4] ? 30 : 0);
   }
 
   const courts = text.match(new RegExp(`\\b${NUM}\\s+courts?\\b`, 'i'));
