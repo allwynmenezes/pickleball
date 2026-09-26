@@ -62,6 +62,13 @@ app.put('/api/state', (req, res) => {
   }
 });
 
+// "Describe your event" runs on Workers AI, so only the Cloudflare backend
+// (backend-worker/src/ai.js) has it. Same route here so the app gets a
+// clear message instead of a 404.
+app.post('/api/ai/parse-event', (req, res) => {
+  res.status(501).json({ error: 'Event descriptions need the Cloudflare backend. Fill in the form instead.' });
+});
+
 
 if (require.main === module) {
   // Only a real start loads .env (email settings, PUBLIC_URL). Tests require

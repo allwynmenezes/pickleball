@@ -11,7 +11,7 @@ import { json, err, readJson, sha256 } from './util.js';
    — RSVPs, court claims, roster, scores — stays open to the whole group. */
 const HOST_ONLY_FIELDS = ['name', 'date', 'startTime', 'durationMin', 'courts', 'gameLenMin', 'segments', 'memberIds', 'courtNames', 'createdBy'];
 
-async function requesterId(request, db) {
+export async function requesterId(request, db) {
   const [scheme, token] = (request.headers.get('Authorization') || '').split(' ');
   if (scheme !== 'Bearer' || !token) return null;
   const session = await db.prepare('SELECT playerId, expiresAt FROM sessions WHERE tokenHash = ?').bind(await sha256(token)).first();

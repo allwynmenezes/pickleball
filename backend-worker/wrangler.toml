@@ -3,6 +3,7 @@
 # Secrets are set with `npx wrangler secret put <NAME>`, never stored here:
 #   APPS_SCRIPT_URL, APPS_SCRIPT_SECRET   OTP email delivery (see backend/email/)
 #   MIGRATION_TOKEN                       only while importing data, then delete
+# AI_DISABLED=1 (a var or secret) switches off "describe your event".
 name = "the-pickle-slot"
 main = "src/index.js"
 compatibility_date = "2024-09-23"
@@ -11,3 +12,12 @@ compatibility_date = "2024-09-23"
 binding = "DB"
 database_name = "pickle-slot"
 database_id = "699c6368-86ac-4a16-bd7b-f11034340f59"
+
+# Workers AI, for "describe your event" (src/ai.js). Free plan: 10,000
+# neurons a day, after which calls fail until the next day (no charge).
+[ai]
+binding = "AI"
+
+[vars]
+AI_USER_DAILY_LIMIT = "30"    # requests per player per day
+AI_TOTAL_DAILY_LIMIT = "150"  # whole app per day, under the free allowance

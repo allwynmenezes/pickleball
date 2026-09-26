@@ -5,6 +5,7 @@
      GET/PUT /api/state                          shared group state
      /api/players/:id/claim-link, /api/claim/:t  invites
      /api/auth/...                               sign up, login, passwords
+     POST /api/ai/parse-event                    describe an event → draft (ai.js)
      POST /api/admin/import                      one-time data move
      GET /claim/:token                           the invite page people tap */
 import { json, err, readJson, tokensEqual } from './util.js';
@@ -13,6 +14,7 @@ import {
   createClaimLink, claimInfo, signupOtp, signupVerify, login, forgotPassword, resetPassword, me, logout,
   getPlayerByClaimToken, claimProblem, publicBaseUrl,
 } from './auth.js';
+import { parseEvent } from './ai.js';
 
 const ROUTES = [
   ['GET', '/api/health', () => json({ ok: true })],
@@ -27,6 +29,7 @@ const ROUTES = [
   ['POST', '/api/auth/password/reset', resetPassword],
   ['GET', '/api/auth/me', me],
   ['POST', '/api/auth/logout', logout],
+  ['POST', '/api/ai/parse-event', parseEvent],
   ['POST', '/api/admin/import', importData],
   ['GET', '/claim/:token', claimLandingPage],
 ].map(([method, pattern, handler]) => {

@@ -53,3 +53,14 @@ CREATE TABLE IF NOT EXISTS sessions (
   playerId TEXT NOT NULL,
   expiresAt INTEGER NOT NULL
 );
+
+-- One row per "describe your event" request, for the AI usage limits in
+-- src/ai.js. Worker-only: the local Node backend has no AI endpoint.
+-- Rows older than two days are deleted as new ones come in.
+CREATE TABLE IF NOT EXISTS ai_calls (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  playerId TEXT NOT NULL,
+  ts INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_ai_calls_player_ts ON ai_calls(playerId, ts);
+CREATE INDEX IF NOT EXISTS idx_ai_calls_ts ON ai_calls(ts);
