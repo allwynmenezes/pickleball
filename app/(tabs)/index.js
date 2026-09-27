@@ -1,16 +1,35 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Platform, Pressable, useWindowDimensions } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { pushOnce } from '../../lib/nav';
 import { Screen, SectionTitle, Card, Row, Badge, EmptyState, BoldPlus } from '../../lib/ui';
 import Calendar, { CalendarLegend } from '../../components/Calendar';
 import { useStore } from '../../lib/store';
 import { useAuth } from '../../lib/auth';
 import { showConfirm } from '../../lib/confirm';
-import { fmtClock } from '../../lib/engine';
+import { fmtClock, splitEventsByTime } from '../../lib/engine';
 import { colors } from '../../lib/theme';
 
 const WIDE_BREAKPOINT = 760;
+const PAST_PREVIEW = 10;
+
+function fmtDateShort(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+/* The current time, refreshed every minute and whenever the Events tab
+   comes back into view — so an event moves to "Past events" as soon as it
+   ends, without reopening the app. */
+function useNow() {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 60000);
+    return () => clearInterval(t);
+  }, []);
+  useFocusEffect(useCallback(() => { setNow(new Date()); }, []));
+  return now;
+}
 
 function fmtDateLong(dateStr) {
   const d = new Date(dateStr + 'T00:00:00');
@@ -25,6 +44,8 @@ export default function EventsScreen() {
   const isWideWeb = Platform.OS === 'web' && width >= WIDE_BREAKPOINT;
   const [cursor, setCursor] = useState(() => { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() }; });
   const [selectedDate, setSelectedDate] = useState(null);
+  const [showAllPast, setShowAllPast] = useState(false);
+  const now = useNow();
 
   function shift(delta) {
     setCursor(({ year, month }) => {
@@ -35,7 +56,9 @@ export default function EventsScreen() {
   }
 
   const dayEvents = selectedDate ? events.filter(e => e.date === selectedDate) : [];
-  const sortedAll = [...events].sort((a, b) => b.date.localeCompare(a.date));
+  const { upcoming, past } = splitEventsByTime(events, now);
+  const pastShown = showAllPast ? past : past.slice(0, PAST_PREVIEW);
+  const openEvent = e => pushOnce(router, { pathname: '/event/[id]', params: { id: e.id } });
 
   const calendarBlock = (
     <Card style={isWideWeb ? styles.calCardWide : null}>
@@ -61,17 +84,38 @@ export default function EventsScreen() {
     </View>
   ) : null;
 
-  const allEventsBlock = events.length > 0 ? (
+  const upcomingBlock = events.length > 0 ? (
     <View>
-      <SectionTitle first={isWideWeb && !selectedDate}>All events</SectionTitle>
+      <SectionTitle first={isWideWeb && !selectedDate}>Upcoming events</SectionTitle>
       <Card>
-        {sortedAll.map(e => (
-          <Row key={e.id} onPress={() => pushOnce(router, { pathname: '/event/[id]', params: { id: e.id } })}>
+        {upcoming.length === 0 ? (
+          <Text style={styles.emptyHint}>Nothing coming up. Tap <Text style={styles.emptyHintStrong}>+ New Event</Text> to plan the next one.</Text>
+        ) : upcoming.map(e => (
+          <Row key={e.id} onPress={() => openEvent(e)}>
             <Text style={styles.name} numberOfLines={1}>{e.name}</Text>
             <Badge label={e.published ? 'Published' : 'Draft'} kind={e.published ? 'ok' : 'wait'} />
-            <Text style={styles.meta}>{e.date}</Text>
+            <Text style={styles.meta}>{fmtDateShort(e.date)} · {fmtClock(e.startTime)}</Text>
           </Row>
         ))}
+      </Card>
+    </View>
+  ) : null;
+
+  const pastBlock = past.length > 0 ? (
+    <View>
+      <SectionTitle>Past events ({past.length})</SectionTitle>
+      <Card>
+        {pastShown.map(e => (
+          <Row key={e.id} onPress={() => openEvent(e)}>
+            <Text style={[styles.name, styles.pastName]} numberOfLines={1}>{e.name}</Text>
+            <Text style={styles.meta}>{fmtDateShort(e.date)}</Text>
+          </Row>
+        ))}
+        {past.length > PAST_PREVIEW ? (
+          <Pressable onPress={() => setShowAllPast(v => !v)} style={styles.moreBtn} accessibilityRole="button">
+            <Text style={styles.moreText}>{showAllPast ? 'Show fewer' : `Show all ${past.length} past events`}</Text>
+          </Pressable>
+        ) : null}
       </Card>
     </View>
   ) : null;
@@ -82,14 +126,15 @@ export default function EventsScreen() {
 
   return (
     <View style={styles.wrap}>
-      <Screen contentStyle={isWideWeb ? { paddingBottom: 60 } : null}>
+      <Screen contentStyle={{ paddingBottom: isWideWeb ? 60 : 140 }}>
         <SectionTitle first={!isWideWeb}>Events</SectionTitle>
         {isWideWeb ? (
           <View style={styles.webRow}>
             <View style={styles.webCalCol}>{calendarBlock}</View>
             <View style={styles.webListCol}>
               {selectedDayBlock}
-              {allEventsBlock}
+              {upcomingBlock}
+              {pastBlock}
               {emptyBlock}
             </View>
           </View>
@@ -97,7 +142,8 @@ export default function EventsScreen() {
           <View>
             {calendarBlock}
             {selectedDayBlock}
-            {allEventsBlock}
+            {upcomingBlock}
+            {pastBlock}
             {emptyBlock}
           </View>
         )}
@@ -126,6 +172,9 @@ const styles = StyleSheet.create({
   meta: { fontSize: 12, color: colors.slate },
   emptyHint: { fontSize: 13, color: colors.slate },
   emptyHintStrong: { fontWeight: '700', color: colors.court },
+  pastName: { color: colors.slate, fontWeight: '500' },
+  moreBtn: { paddingTop: 12, alignItems: 'center' },
+  moreText: { color: colors.court, fontWeight: '600', fontSize: 13 },
   webRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 20 },
   webCalCol: { width: 300 },
   webListCol: { flex: 1, minWidth: 0 },

@@ -2,7 +2,7 @@
    fair sitting out, court types, warm-up repeat, partial RSVPs, kept rounds,
    and speed. Run with `npm test` from the project root. */
 import assert from 'node:assert/strict';
-import { generateRoster, pairKey } from '../lib/engine.js';
+import { generateRoster, pairKey, isPastEvent, splitEventsByTime } from '../lib/engine.js';
 
 let failures = 0;
 const check = (name, fn) => {
@@ -141,6 +141,32 @@ check('regenerating from a round keeps the earlier rounds exactly', () => {
   assert.equal(again.length, 16);
   assert.notEqual(game(again[6]), game(again[5]));
 });
+
+console.log('past and upcoming events');
+{
+  const ev = (id, date, startTime, durationMin = 120) => ({ id, date, startTime, durationMin });
+  const now = new Date(2026, 8, 27, 19, 0); // Sun 27 Sep 2026, 7pm local
+  check('an event that finished earlier today is past', () => assert.equal(isPastEvent(ev('a', '2026-09-27', '09:00'), now), true));
+  check('an event still running is not past', () => assert.equal(isPastEvent(ev('a', '2026-09-27', '18:00'), now), false));
+  check('it becomes past the minute it ends', () => {
+    const e = ev('a', '2026-09-27', '17:00', 120);
+    assert.equal(isPastEvent(e, new Date(2026, 8, 27, 18, 59)), false);
+    assert.equal(isPastEvent(e, new Date(2026, 8, 27, 19, 0)), true);
+  });
+  check('a late event running past midnight stays upcoming until it ends', () => {
+    const e = ev('a', '2026-09-26', '23:00', 180); // Sat 11pm → Sun 2am
+    assert.equal(isPastEvent(e, new Date(2026, 8, 27, 1, 0)), false);
+    assert.equal(isPastEvent(e, new Date(2026, 8, 27, 2, 0)), true);
+  });
+  check('upcoming is soonest first, past is most recent first', () => {
+    const { upcoming, past } = splitEventsByTime([
+      ev('old', '2026-09-01', '18:00'), ev('later', '2026-10-05', '18:00'), ev('yesterday', '2026-09-26', '18:00'),
+      ev('soon', '2026-09-28', '18:00'), ev('tonight', '2026-09-27', '20:00'), ev('thismorning', '2026-09-27', '08:00'),
+    ], now);
+    assert.deepEqual(upcoming.map(e => e.id), ['tonight', 'soon', 'later']);
+    assert.deepEqual(past.map(e => e.id), ['thismorning', 'yesterday', 'old']);
+  });
+}
 
 console.log('speed');
 check('32 players on 8 courts, 4 hours, in under half a second', () => {
