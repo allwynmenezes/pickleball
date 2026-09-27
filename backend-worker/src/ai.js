@@ -139,3 +139,45 @@ export async function parseEvent(request, env) {
   if (!result) return err(422, "Couldn't find event details in that. Try something like \"Tuesday 6 to 9pm, 4 courts\".");
   return json({ ...result, aiUsed: !!ai });
 }
+
+/* ---- Voice: POST /api/ai/transcribe (multipart form, field "audio") ----
+   The app records a short voice note (the phone's own mic permission, asked
+   by the app) and this turns it into text with Whisper on Workers AI. The
+   text goes back into the "Describe your event" box, where the user can
+   check it before it's read as an event. Same sign-in and limits as
+   parse-event; a voice note counts as one request. */
+const TRANSCRIBE_MODEL = '@cf/openai/whisper-large-v3-turbo';
+const MAX_AUDIO_BYTES = 2 * 1024 * 1024; // ~8 minutes at the app's 32 kbps; notes are capped at 60 s
+
+function toBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(binary);
+}
+
+export async function transcribe(request, env) {
+  if (env.AI_DISABLED === '1' || !env.AI) return err(503, 'Voice input is switched off right now. Type the description instead.');
+  const db = env.DB;
+  const playerId = await requesterId(request, db);
+  if (!playerId) return err(401, 'Sign in to describe an event.');
+
+  let file = null;
+  try { file = (await request.formData()).get('audio'); } catch { /* not multipart */ }
+  if (!file || typeof file.arrayBuffer !== 'function') return err(400, 'No recording was received. Try again.');
+  if (file.size > MAX_AUDIO_BYTES) return err(413, 'That recording is too long. Keep it under a minute.');
+  if (file.size < 1000) return err(400, "That recording was empty. Hold the mic button and speak, then tap it again.");
+
+  const limited = await checkLimits(db, playerId, env);
+  if (limited) return err(429, limited);
+
+  try {
+    const out = await env.AI.run(TRANSCRIBE_MODEL, { audio: toBase64(await file.arrayBuffer()), language: 'en', vad_filter: true });
+    const text = String((out && out.text) || '').replace(/\s+/g, ' ').trim().slice(0, MAX_TEXT);
+    if (!text) return err(422, "Couldn't hear anything in that. Try again a little closer to the phone.");
+    return json({ text });
+  } catch (e) {
+    console.error('transcribe failed', e);
+    return err(502, "Couldn't turn that recording into text. Try again, or type it instead.");
+  }
+}

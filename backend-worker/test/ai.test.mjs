@@ -3,7 +3,7 @@
    off switch) and the fallback when the model fails. No server and no real
    AI calls: run with `npm run test:parse`. */
 import assert from 'node:assert/strict';
-import { parseEvent } from '../src/ai.js';
+import { parseEvent, transcribe } from '../src/ai.js';
 import { sha256 } from '../src/util.js';
 
 let failures = 0;
@@ -100,6 +100,39 @@ await check('daily limit for the whole app', async () => {
   const e = env({ AI_TOTAL_DAILY_LIMIT: '1' });
   e.DB.calls.push({ playerId: 'p2', ts: Date.now() - 120000 });
   assert.equal((await parseEvent(req(ok), e)).status, 429);
+});
+
+// ---- Voice: POST /api/ai/transcribe ----
+const voiceReq = (bytes, token = TOKEN) => {
+  const form = new FormData();
+  if (bytes) form.append('audio', new Blob([new Uint8Array(bytes)], { type: 'audio/mp4' }), 'note.m4a');
+  return new Request('https://x/api/ai/transcribe', { method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {}, body: form });
+};
+const whisper = (reply) => ({ run: async (model, input) => { whisper.last = { model, input }; if (reply instanceof Error) throw reply; return reply; } });
+await check('voice: signed-out request is refused', async () => assert.equal((await transcribe(voiceReq(5000, null), env({ AI: whisper({ text: 'x' }) }))).status, 401));
+await check('voice: missing or empty recording is refused', async () => {
+  assert.equal((await transcribe(voiceReq(null), env({ AI: whisper({ text: 'x' }) }))).status, 400);
+  assert.equal((await transcribe(voiceReq(10), env({ AI: whisper({ text: 'x' }) }))).status, 400);
+});
+await check('voice: an over-long recording is refused before any AI call', async () => {
+  const ai = whisper({ text: 'x' }); whisper.last = null;
+  assert.equal((await transcribe(voiceReq(3 * 1024 * 1024), env({ AI: ai }))).status, 413);
+  assert.equal(whisper.last, null);
+});
+await check('voice: returns the transcript, sending the audio as base64 to Whisper', async () => {
+  const res = await transcribe(voiceReq(5000), env({ AI: whisper({ text: '  Tuesday 6 to 9pm,\n 3 courts ' }) }));
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), { text: 'Tuesday 6 to 9pm, 3 courts' });
+  assert.match(whisper.last.model, /whisper/);
+  assert.equal(typeof whisper.last.input.audio, 'string');
+  assert.equal(Buffer.from(whisper.last.input.audio, 'base64').length, 5000);
+});
+await check('voice: silence gets a helpful 422', async () => assert.equal((await transcribe(voiceReq(5000), env({ AI: whisper({ text: '' }) }))).status, 422));
+await check('voice: a Whisper failure gets a 502, not a crash', async () => assert.equal((await transcribe(voiceReq(5000), env({ AI: whisper(new Error('down')) }))).status, 502));
+await check('voice: counts toward the same limits', async () => {
+  const e = env({ AI: whisper({ text: 'x' }), AI_USER_DAILY_LIMIT: '1' });
+  assert.equal((await transcribe(voiceReq(5000), e)).status, 200);
+  assert.equal((await transcribe(voiceReq(5000), e)).status, 429);
 });
 
 if (failures) { console.error(`\n${failures} failed`); process.exit(1); }
