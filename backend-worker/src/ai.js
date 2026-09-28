@@ -44,8 +44,16 @@ export const SCHEMA = {
       type: 'array',
       items: {
         type: 'object',
-        properties: { mode: { type: 'string', enum: MODES }, minutes: { type: 'integer' } },
-        required: ['mode', 'minutes'],
+        properties: {
+          start: { type: 'string' },
+          end: { type: 'string' },
+          mode: { type: 'string', enum: MODES },
+          courtModes: {
+            type: 'array',
+            items: { type: 'object', properties: { court: { type: 'integer' }, mode: { type: 'string', enum: MODES } }, required: ['court', 'mode'] },
+          },
+        },
+        required: ['start', 'end', 'mode', 'courtModes'],
       },
     },
     playerNames: { type: 'array', items: { type: 'string' } },
@@ -66,7 +74,7 @@ Fields (use "" or 0 for anything not mentioned; never invent details):
 - courts: how many courts, only if the text says how many. Court numbers are not a count: "courts 3 and 4" is 2 courts, "court 5" is 1. Use 0 if not said — never guess it from the number of players.
 - playerCount: how many people are playing, if the text gives a number ("8 players", "12 of us"), else 0.
 - gameLenMin: length of each game in minutes.
-- segments: how play is organised over time, in order. mode is one of: open (any combination), men (men's doubles), women (women's doubles), mixed (mixed doubles), break (no games). minutes is how long that part lasts; use 0 for "the rest of the session". Use [] if the text doesn't say.
+- segments: how play is organised, only if the text says. Each part has start and end (24-hour HH:MM, within the session), a mode for all courts, and courtModes for any court that differs, e.g. {"court":2,"mode":"men"}. Modes: open (any combination), men (men's doubles), women (women's doubles), mixed (mixed doubles), break (no games). List every occurrence of something that repeats ("a 15 minute break every hour" in 18:00-22:00 is breaks 19:00-19:15, 20:00-20:15 and 21:00-21:15). Time not covered is open play. Use [] if the text doesn't say.
 - playerNames: people named as coming or to be invited, exactly as written.
 - inviteEveryone: true if the text says everyone / all players / the whole group.`;
 }

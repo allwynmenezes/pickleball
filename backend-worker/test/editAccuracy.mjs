@@ -39,6 +39,8 @@ const SAMPLES = [
   ['mixed for the last hour', { segments: ['18:00-20:00:open', '20:00-21:00:mixed'] }],
   ["women's doubles for the first hour, then open play", { segments: ['18:00-19:00:women', '19:00-21:00:open'] }],
   ['take a 15 minute break at 7:30', { segments: ['18:00-19:30:open', '19:30-19:45:break', '19:45-21:00:open'] }],
+  ["make court 2 men's doubles for the first hour", { segmentsExact: ['18:00-19:00 {"2":"men"}', '19:00-21:00 {}'] }],
+  ['15 minute break at 7 and at 8', { segmentsExact: ['18:00-19:00 {}', '19:00-19:15 {"1":"break","2":"break","3":"break"}', '19:15-20:00 {}', '20:00-20:15 {"1":"break","2":"break","3":"break"}', '20:15-21:00 {}'] }],
   ['add Cleo and Dev', { addIds: [id('Cleo'), id('Dev')] }],
   ['remove Ben', { removeIds: [id('Ben')] }],
   ['add Fay and drop Ava', { addIds: [id('Fay')], removeIds: [id('Ava M')] }],
@@ -64,9 +66,14 @@ for (const [text, expect] of SAMPLES) {
     misses.push(`HTTP ${res.status}: ${body.error}`);
   } else {
     const got = { ...body.changes };
-    if (got.segments) got.segments = modes(got.segments);
-    ['addIds', 'removeIds'].forEach(k => { if (got[k]) got[k] = [...got[k]].sort(); });
     const want = { ...expect };
+    if (want.segmentsExact) delete want.segments;
+    if (got.segments) {
+      if (want.segmentsExact) got.segmentsExact = got.segments.map(s => `${s.start}-${s.end} ${JSON.stringify(s.modes)}`);
+      else got.segments = modes(got.segments);
+      if (want.segmentsExact) delete got.segments;
+    }
+    ['addIds', 'removeIds'].forEach(k => { if (got[k]) got[k] = [...got[k]].sort(); });
     ['addIds', 'removeIds'].forEach(k => { if (want[k]) want[k] = [...want[k]].sort(); });
     for (const k of new Set([...Object.keys(want), ...Object.keys(got)])) {
       if (JSON.stringify(got[k]) !== JSON.stringify(want[k])) misses.push(`${k}: expected ${JSON.stringify(want[k])}, got ${JSON.stringify(got[k])}`);

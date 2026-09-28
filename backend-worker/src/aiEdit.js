@@ -69,7 +69,7 @@ Read the user's message and give the session's NEW values as JSON. For any field
 - understood: false if the message is not a change to this session.
 - name, date (YYYY-MM-DD), startTime and endTime (24-hour HH:MM), durationMin, courts, gameLenMin: the new value. Work relative changes out from the current values: "an hour later" moves startTime by an hour and keeps the length; "end at 11" is endTime 23:00; "add a court" is the current courts plus one.
 - playerCount: only if the message gives a number of people playing.
-- segments: only if the play format changes, and then the WHOLE session in order as mode (open, men, women, mixed, break) and minutes, with minutes 0 for "the rest". Example: "mixed for the last hour" in a 180-minute session is [{"mode":"open","minutes":120},{"mode":"mixed","minutes":0}].
+- segments: only if the play format changes, and then the WHOLE session as parts with start and end (24-hour HH:MM), a mode for all courts (open, men, women, mixed, break) and courtModes for courts that differ, e.g. {"court":2,"mode":"men"}. Keep parts of the current format that the message doesn't change. List every occurrence of something that repeats. Example: "mixed for the last hour" in an 18:00-21:00 session is [{"start":"18:00","end":"20:00","mode":"open","courtModes":[]},{"start":"20:00","end":"21:00","mode":"mixed","courtModes":[]}].
 - addPlayers, removePlayers: names exactly as written. inviteEveryone: true for "add everyone".`;
 }
 

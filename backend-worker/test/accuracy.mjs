@@ -56,6 +56,11 @@ const SAMPLES = [
   ['Tuesday league, 4 courts, 7pm, men only first half hour then open', { date: '2026-09-29', startTime: '19:00', courts: 4, segments: ['men', 'open'] }],
   ['Saturday 6 to 10pm, 8 players, 15 minute break every hour', { date: '2026-09-26', startTime: '18:00', courts: 2 }],
   ['Sunday 9am to noon on courts 3 and 4', { date: '2026-09-27', startTime: '09:00', durationMin: 180, courts: 2 }],
+  // Exact play format: every part's times and every court's mode.
+  ['Saturday 6 to 10pm, 2 courts, 15 minute break every hour', { segmentsExact: ['18:00-19:00 {}', '19:00-19:15 {"1":"break","2":"break"}', '19:15-20:00 {}', '20:00-20:15 {"1":"break","2":"break"}', '20:15-21:00 {}', '21:00-21:15 {"1":"break","2":"break"}', '21:15-22:00 {}'] }],
+  ['Saturday 6 to 9pm, 3 courts. First hour court 1 mixed, court 2 mens and court 3 womens. Second hour all mixed. Last hour open', { segmentsExact: ['18:00-19:00 {"1":"mixed","2":"men","3":"women"}', '19:00-20:00 {"1":"mixed","2":"mixed","3":"mixed"}', '20:00-21:00 {}'] }],
+  ["Tuesday 6-10pm, 2 courts, court 1 women's doubles the whole time, court 2 open", { segmentsExact: ['18:00-22:00 {"1":"women"}'] }],
+  ['Friday 7 to 10pm on 2 courts: court 1 mixed and court 2 open, with a 30 minute break at 8:30', { segmentsExact: ['19:00-20:30 {"1":"mixed"}', '20:30-21:00 {"1":"break","2":"break"}', '21:00-22:00 {"1":"mixed"}'] }],
   // Not events: should be refused (422).
   ['can you remind me to buy milk', { refused: true }],
   ['what is the weather like tomorrow', { refused: true }],
@@ -87,6 +92,7 @@ for (const [text, expect] of SAMPLES) {
     for (const [k, v] of Object.entries(expect)) {
       let got;
       if (k === 'segments') got = modesOf(d.segments);
+      else if (k === 'segmentsExact') got = d.segments.map(s => `${s.start}-${s.end} ${JSON.stringify(s.modes)}`);
       else if (k === 'everyone') got = d.memberIds.length > 0 && body.filled.includes('players');
       else if (k === 'names') got = [...body.unmatchedNames, ...d.memberIds.map(id => (players.find(p => p.id === id) || {}).name)].sort();
       else got = d[k];

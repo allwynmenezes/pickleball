@@ -47,7 +47,7 @@ export function extractFromText(text, opts) {
    unambiguous readings are trusted there. */
 function readText(text, { now, tzOffsetMin = 0 } = {}) {
   const out = {};
-  const meta = { timeRange: false, durationFrom: null };
+  const meta = { timeRange: false, durationFrom: null, courtsFrom: null };
   const ref = { instant: now ? new Date(now) : new Date(), timezone: tzOffsetMin };
   // Numbers first. Each phrase found is then blanked out, so chrono doesn't
   // also read "games of 20 minutes" as "20 minutes from now".
@@ -80,11 +80,22 @@ function readText(text, { now, tzOffsetMin = 0 } = {}) {
   if (courts) out.courts = num(courts[1]);
   else {
     // Court numbers rather than a count: "courts 3 and 4", "courts 1-3",
-    // "court 5" — the count is how many courts were named.
-    const range = find(/\bcourts?\s*#?\s*(\d{1,2})\s*(?:-|–|to|through|thru)\s*(\d{1,2})\b/i);
-    const list = !range && find(/\bcourts?\s*#?\s*(\d{1,2}(?:\s*(?:,|and|&)\s*#?\d{1,2})*)\b/i);
-    if (range) out.courts = Math.abs(Number(range[2]) - Number(range[1])) + 1;
-    else if (list) out.courts = list[1].match(/\d{1,2}/g).length;
+    // "court 1 mixed, court 2 men's" — the count is how many different
+    // courts are named anywhere in the text.
+    const named = new Set();
+    let m;
+    const re = /\bcourts?\s*#?\s*(\d{1,2})(?:\s*(?:-|–|to|through|thru)\s*(\d{1,2}))?((?:\s*(?:,|and|&)\s*#?\d{1,2})*)\b/gi;
+    while ((m = re.exec(rest))) {
+      const a = Number(m[1]);
+      if (m[2]) for (let c = Math.min(a, Number(m[2])); c <= Math.max(a, Number(m[2])); c++) named.add(c);
+      else named.add(a);
+      (m[3].match(/\d{1,2}/g) || []).forEach(n => named.add(Number(n)));
+    }
+    if (named.size) {
+      out.courts = named.size;
+      meta.courtsFrom = 'numbers';
+      rest = rest.replace(re, ' ');
+    }
   }
   // "8 players", "12 people", "16 of us" — used to work out courts when
   // the text doesn't say how many.
@@ -225,6 +236,73 @@ export function buildSegments(rawSegments, { startTime, durationMin, courts }) {
   }, []);
 }
 
+/* Segments from the model as clock times: [{ start, end, mode, courtModes:
+   [{ court, mode }] }]. `mode` applies to every court in that part and
+   courtModes overrides single courts ("court 1 mixed, court 2 men's").
+   Clock times rather than minutes, because the model miscounts running
+   totals ("a break every hour" drifted to 7:00, 8:15, …) but lists clock
+   times reliably. Parts are sorted and clipped to the event, overlaps
+   trimmed, gaps filled with open play, and neighbours with identical
+   modes merged. Returns null when nothing usable was given. */
+export function buildTimedSegments(raw, { startTime, durationMin, courts }) {
+  if (!Array.isArray(raw) || !raw.length) return null;
+  const start = toMin(startTime);
+  // Minutes from the event's start. A time shortly before the start (e.g.
+  // 17:30 for an 18:00 event) comes out near 1440 and is clamped to 0.
+  const off = hhmm => {
+    if (!isClock(hhmm)) return null;
+    const o = (toMin(hhmm) - start + 1440) % 1440;
+    return o > durationMin && o > 1440 - 180 ? 0 : o;
+  };
+  const modesFor = (mode, courtModes) => {
+    const out = {};
+    for (let c = 1; c <= courts; c++) if (MODES.includes(mode) && mode !== 'open') out[c] = mode;
+    (Array.isArray(courtModes) ? courtModes : []).forEach(cm => {
+      const c = Math.round(Number(cm && cm.court));
+      if (c >= 1 && c <= courts && MODES.includes(cm.mode)) { if (cm.mode === 'open') delete out[c]; else out[c] = cm.mode; }
+    });
+    return out;
+  };
+  const parts = raw
+    .map(s => {
+      const a = off(s && s.start);
+      let b = off(s && s.end);
+      if (a === null || b === null) return null;
+      if (b === 0 && a > 0) b = 1440; // an end at the event's start time means "until midnight-ish" wrap
+      return { a, b: Math.min(b, durationMin), modes: modesFor(s.mode, s.courtModes) };
+    })
+    .filter(p => p && p.a < durationMin && p.b > p.a)
+    .sort((x, y) => x.a - y.a);
+  if (!parts.length) return null;
+  const clockAt = o => toClock(start + o);
+  const out = [];
+  let cursor = 0;
+  for (const p of parts) {
+    const a = Math.max(p.a, cursor);
+    if (p.b <= a) continue;
+    if (a > cursor) out.push({ start: clockAt(cursor), end: clockAt(a), modes: {} });
+    out.push({ start: clockAt(a), end: clockAt(p.b), modes: p.modes });
+    cursor = p.b;
+  }
+  if (cursor < durationMin) out.push({ start: clockAt(cursor), end: clockAt(durationMin), modes: {} });
+  return out.reduce((acc, s) => {
+    const prev = acc[acc.length - 1];
+    if (prev && JSON.stringify(prev.modes) === JSON.stringify(s.modes)) prev.end = s.end;
+    else acc.push(s);
+    return acc;
+  }, []);
+}
+
+/* The model's segments, either as clock-time parts (current) or as
+   lengths (older replies) — null if there's nothing usable. */
+function segmentsFromModel(raw, ev) {
+  if (!Array.isArray(raw) || !raw.length) return null;
+  if (raw.some(s => s && isClock(s.start))) return buildTimedSegments(raw, ev);
+  if (raw.some(s => s && s.minutes !== undefined)) return buildSegmentsByLength(raw, ev);
+  return null;
+}
+const buildSegmentsByLength = (raw, ev) => buildSegments(raw, ev);
+
 function defaultName(date, startTime) {
   const day = date ? new Date(`${date}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' }) : '';
   const h = Number((startTime || '18:00').split(':')[0]);
@@ -340,9 +418,10 @@ export function buildDraft(text, ai, players, opts = {}) {
   }
   courts = clamp(courts, LIMITS.courts);
 
-  const hasSegments = Array.isArray(model.segments) && model.segments.some(s => s && s.mode && s.mode !== 'open');
+  const planned = segmentsFromModel(model.segments, { startTime, durationMin, courts });
+  const hasSegments = !!planned && planned.some(s => Object.keys(s.modes).length);
   if (hasSegments) filled.push('segments');
-  const segments = buildSegments(hasSegments ? model.segments : [], { startTime, durationMin, courts });
+  const segments = hasSegments ? planned : buildSegments([], { startTime, durationMin, courts });
 
   if (!filled.length) return null;
   return { draft: { name, date, startTime, durationMin, courts, gameLenMin, segments, memberIds }, filled, unmatchedNames, courtsFrom };
@@ -396,6 +475,8 @@ export function buildEdit(text, ai, current, players, opts = {}) {
   if (!meta.timeRange) delete fromText.startTime;
   if (meta.durationFrom !== 'range' && meta.durationFrom !== 'for') delete fromText.durationMin;
   if (RELATIVE_COURTS.test(text)) delete fromText.courts;
+  // In an edit, "court 2" says which court, not how many.
+  if (meta.courtsFrom === 'numbers') delete fromText.courts;
   if (!MENTIONS_DATE.test(text)) delete fromText.date;
   const model = fromModel(ai ? { ...ai, isEvent: true } : null);
   if (model.date && model.date < today) {
@@ -451,6 +532,7 @@ export function buildEdit(text, ai, current, players, opts = {}) {
   if (next.courts !== current.courts) { changes.courts = next.courts; said.push(`Courts ${current.courts} → ${next.courts}`); }
   if (next.gameLenMin !== (current.gameLenMin || DEFAULTS.gameLenMin)) { changes.gameLenMin = next.gameLenMin; said.push(`Games ${current.gameLenMin || DEFAULTS.gameLenMin} → ${next.gameLenMin} min`); }
   const hasSegments = Array.isArray(model.segments) && model.segments.length > 0;
+  const buildSegments = (raw, ev) => segmentsFromModel(raw, ev) || buildSegmentsByLength(raw, ev);
   // The model may repeat the current format back; only a real change counts.
   const sameSegments = (a, b) => JSON.stringify((a || []).map(s => [s.start, s.end, s.modes || {}])) === JSON.stringify((b || []).map(s => [s.start, s.end, s.modes || {}]));
   const newSegments = hasSegments ? buildSegments(model.segments, next) : null;

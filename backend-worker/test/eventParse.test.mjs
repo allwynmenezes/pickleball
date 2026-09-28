@@ -1,7 +1,7 @@
 /* Unit tests for src/eventParse.js — the code-only half of "describe your
    event". No server, no AI calls: run with `npm run test:parse`. */
 import assert from 'node:assert/strict';
-import { extractFromText, buildSegments, matchPlayers, buildDraft, buildEdit } from '../src/eventParse.js';
+import { extractFromText, buildSegments, buildTimedSegments, matchPlayers, buildDraft, buildEdit } from '../src/eventParse.js';
 
 let failures = 0;
 const check = (name, fn) => {
@@ -76,6 +76,38 @@ check('last segment stretches to the end', () => assert.equal(buildSegments([{ m
 check('segments past the end are dropped', () => assert.equal(buildSegments([{ mode: 'mixed', minutes: 300 }, { mode: 'men', minutes: 60 }], ev).length, 1));
 check('unknown mode becomes open', () => assert.deepEqual(buildSegments([{ mode: 'chaos', minutes: 0 }], ev)[0].modes, {}));
 
+console.log('buildTimedSegments');
+{
+  const ev4 = { startTime: '18:00', durationMin: 240, courts: 2 };
+  const seg = (start, end, mode, courtModes = []) => ({ start, end, mode, courtModes });
+  const show = segs => segs.map(s => `${s.start}-${s.end} ${JSON.stringify(s.modes)}`);
+  check('a break every hour lands on the hour, with open play between', () => assert.deepEqual(
+    show(buildTimedSegments([seg('19:00', '19:15', 'break'), seg('20:00', '20:15', 'break'), seg('21:00', '21:15', 'break')], ev4)),
+    ['18:00-19:00 {}', '19:00-19:15 {"1":"break","2":"break"}', '19:15-20:00 {}', '20:00-20:15 {"1":"break","2":"break"}', '20:15-21:00 {}', '21:00-21:15 {"1":"break","2":"break"}', '21:15-22:00 {}'],
+  ));
+  check('different modes per court', () => assert.deepEqual(
+    show(buildTimedSegments([seg('18:00', '19:00', 'open', [{ court: 1, mode: 'mixed' }, { court: 2, mode: 'men' }]), seg('19:00', '22:00', 'mixed')], ev4)),
+    ['18:00-19:00 {"1":"mixed","2":"men"}', '19:00-22:00 {"1":"mixed","2":"mixed"}'],
+  ));
+  check('one court differs from the rest', () => assert.deepEqual(
+    show(buildTimedSegments([seg('18:00', '22:00', 'women', [{ court: 2, mode: 'open' }])], ev4)),
+    ['18:00-22:00 {"1":"women"}'],
+  ));
+  check('parts are sorted, clipped to the event, and overlaps trimmed', () => assert.deepEqual(
+    show(buildTimedSegments([seg('21:00', '23:00', 'mixed'), seg('17:00', '19:00', 'men'), seg('18:30', '19:30', 'women')], ev4)),
+    ['18:00-19:00 {"1":"men","2":"men"}', '19:00-19:30 {"1":"women","2":"women"}', '19:30-21:00 {}', '21:00-22:00 {"1":"mixed","2":"mixed"}'],
+  ));
+  check('courts that don\'t exist and unknown modes are ignored', () => assert.deepEqual(
+    show(buildTimedSegments([seg('18:00', '22:00', 'chaos', [{ court: 5, mode: 'men' }, { court: 1, mode: 'mixed' }])], ev4)),
+    ['18:00-22:00 {"1":"mixed"}'],
+  ));
+  check('an event past midnight', () => assert.deepEqual(
+    show(buildTimedSegments([seg('23:00', '00:30', 'mixed')], { startTime: '22:00', durationMin: 180, courts: 1 })),
+    ['22:00-23:00 {}', '23:00-00:30 {"1":"mixed"}', '00:30-01:00 {}'],
+  ));
+  check('nothing usable → null', () => assert.equal(buildTimedSegments([{ start: 'soon', end: '', mode: 'mixed' }], ev4), null));
+}
+
 console.log('matchPlayers');
 const players = [{ id: 'a', name: 'Priya Shah' }, { id: 'b', name: 'Sam Lee' }, { id: 'c', name: 'Samantha Cruz' }, { id: 'd', name: 'Ben' }, { id: 'e', name: 'Ben Ortiz' }];
 check('first name, misspelling, prefix', () => assert.deepEqual(matchPlayers(['priya', 'Samanta', 'sam'], players), { matched: ['a', 'c', 'b'], unmatched: [] }));
@@ -111,6 +143,7 @@ check('courts: court numbers are counted, not read as a count', () => {
   assert.equal(x('Tuesday 6pm, courts 1-3').courts, 3);
   assert.equal(x('Tuesday 6pm on court 5').courts, 1);
   assert.equal(x('Tuesday 6pm, courts 2, 4 & 6').courts, 3);
+  assert.equal(x("sat 6pm, court 1 mixed, court 2 mens and court 3 womens").courts, 3, 'every court named counts');
 });
 check('courts: worked out from a stated player count, 4 to a court, rounded down', () => {
   const c = t => buildDraft(t, null, players, opts).draft.courts;
@@ -186,6 +219,11 @@ console.log('buildEdit');
   check('"now" is not a date change, and repeated current values are ignored', () => {
     assert.deepEqual(edit('we only have 2 courts now', { courts: 2, date: '2026-09-26' }).changes, { courts: 2 });
     assert.deepEqual(edit('push it back an hour', { startTime: '19:00', endTime: '21:00' }).changes, { startTime: '19:00' });
+  });
+  check('in an edit, "court 2" says which court, not how many', () => {
+    const r = edit("make court 2 men's doubles for the first hour", { segments: [{ start: '18:00', end: '19:00', mode: 'open', courtModes: [{ court: 2, mode: 'men' }] }] });
+    assert.equal(r.changes.courts, undefined);
+    assert.deepEqual(r.changes.segments, [{ start: '18:00', end: '19:00', modes: { 2: 'men' } }, { start: '19:00', end: '21:00', modes: {} }]);
   });
   check('nothing to change → null', () => assert.equal(edit('thanks!', {}), null));
   check('works on text alone when the model is down', () => assert.deepEqual(edit('make it 7 to 9pm on 4 courts', null).changes, { startTime: '19:00', durationMin: 120, courts: 4 }));
