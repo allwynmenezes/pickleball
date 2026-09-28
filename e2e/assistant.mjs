@@ -99,6 +99,9 @@ await step('the host can delete a draft from its Setup page', async () => {
 
 console.log('New event with the assistant');
 await step('the new-event form has a Game length field', async () => {
+  // Just back from the deleted draft: wait out the app's double-tap guard
+  // (lib/nav.js ignores a new push while the last one is animating).
+  await page.waitForTimeout(1000);
   await page.getByText('New Event').click();
   await page.getByText('Game length (min)').waitFor({ timeout: 10000 });
 });

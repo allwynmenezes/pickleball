@@ -5,7 +5,8 @@
   "scripts": {
     "serve": "serve -s web -l 5055 --no-clipboard",
     "test": "node describe-event.mjs",
-    "test:assistant": "node assistant.mjs"
+    "test:assistant": "node assistant.mjs",
+    "test:calendar": "node calendar.mjs"
   },
   "devDependencies": {
     "playwright-core": "^1.55.0",

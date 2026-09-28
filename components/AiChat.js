@@ -21,7 +21,7 @@ const MAX_LEN = 500;
 const fmtSecs = ms => { const s = Math.floor(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 const fmtTime = ts => new Date(ts).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 
-export default function AiChat({ messages, onSend, placeholder, emptyHint, signedIn = true, scrollable = false, busyLabel = 'Working on it…' }) {
+export default function AiChat({ messages = [], onSend, placeholder, emptyHint, signedIn = true, scrollable = false, busyLabel = 'Working on it…' }) {
   const [input, setInput] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState(null);

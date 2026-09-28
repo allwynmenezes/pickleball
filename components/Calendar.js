@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import React, { useLayoutEffect, useRef, useState } from 'react';
+import { View, Text, Pressable, StyleSheet, Animated, PanResponder, Easing, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../lib/auth';
 import { localDateStr } from '../lib/engine';
@@ -50,19 +50,31 @@ export function CalendarLegend() {
   );
 }
 
+const monthShift = ({ year, month }, delta) => {
+  let m = month + delta, y = year;
+  while (m < 0) { m += 12; y--; }
+  while (m > 11) { m -= 12; y++; }
+  return { year: y, month: m };
+};
+
+const SWIPE_DISTANCE = 0.25; // of the width, to change month on release
+const SWIPE_VELOCITY = 0.5;  // px/ms — a quick flick changes month too
+const SLIDE_MS = 240;
+
+/* Swipe left/right (or tap the arrows) to change month. The current month
+   is laid out normally — so the calendar is its height — with the previous
+   and next months just out of view either side; dragging slides all three
+   with the finger. On release it either finishes the slide or springs
+   back, animated on the native UI thread. Only once the slide has finished
+   does it call onShift — the same call the arrows always made — so the
+   parent's month state and everything built on it are unchanged. A drag
+   only takes over when it's clearly sideways, so day taps and scrolling
+   the page work as before. */
 export default function Calendar({ cursor, onShift, events, selectedDate, onSelectDate }) {
   const { player: me } = useAuth();
   const { year, month } = cursor;
-  const first = new Date(year, month, 1);
-  const startWeekday = first.getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const monthLabel = first.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+  const monthLabel = new Date(year, month, 1).toLocaleString('en-US', { month: 'long', year: 'numeric' });
   const todayStr = localDateStr();
-
-  const cells = [];
-  for (let i = 0; i < startWeekday; i++) cells.push(null);
-  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
-  while (cells.length % 7 !== 0) cells.push(null);
 
   const eventsByDate = {};
   events.forEach(e => {
@@ -70,17 +82,65 @@ export default function Calendar({ cursor, onShift, events, selectedDate, onSele
     if (role) (eventsByDate[e.date] = eventsByDate[e.date] || []).push({ ev: e, role });
   });
 
-  const rows = [];
-  for (let i = 0; i < cells.length; i += 7) rows.push(cells.slice(i, i + 7));
+  const [width, setWidth] = useState(0);
+  const drag = useRef(new Animated.Value(0)).current;
+  const animating = useRef(false);
+  const resetAfterShift = useRef(false);
+  const latest = useRef({});
+  latest.current = { width, onShift };
 
+  // After the parent moves to the new month, put the strip back in the
+  // middle before that frame is drawn, so the new month shows in place.
+  useLayoutEffect(() => {
+    if (resetAfterShift.current) {
+      resetAfterShift.current = false;
+      drag.setValue(0);
+      animating.current = false;
+    }
+  }, [year, month, drag]);
+
+  function slideTo(delta, velocity = 0) {
+    const w = latest.current.width;
+    if (animating.current) return;
+    if (!w) { latest.current.onShift(delta); return; } // not laid out yet: just change month
+    animating.current = true;
+    Animated.timing(drag, {
+      toValue: -delta * w,
+      duration: velocity > 1.5 ? SLIDE_MS * 0.6 : SLIDE_MS,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: Platform.OS !== 'web',
+    }).start(({ finished }) => {
+      if (!finished) { animating.current = false; return; }
+      resetAfterShift.current = true;
+      latest.current.onShift(delta);
+    });
+  }
+  function springBack() {
+    Animated.spring(drag, { toValue: 0, useNativeDriver: Platform.OS !== 'web', bounciness: 0, speed: 18 }).start();
+  }
+
+  const pan = useRef(PanResponder.create({
+    onMoveShouldSetPanResponder: (_, g) => !animating.current && Math.abs(g.dx) > 12 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
+    onPanResponderTerminationRequest: () => false,
+    onPanResponderMove: (_, g) => drag.setValue(g.dx),
+    onPanResponderRelease: (_, g) => {
+      const w = latest.current.width || 1;
+      if (g.dx < -w * SWIPE_DISTANCE || g.vx < -SWIPE_VELOCITY) slideTo(1, Math.abs(g.vx));
+      else if (g.dx > w * SWIPE_DISTANCE || g.vx > SWIPE_VELOCITY) slideTo(-1, Math.abs(g.vx));
+      else springBack();
+    },
+    onPanResponderTerminate: () => springBack(),
+  })).current;
+
+  const gridProps = { eventsByDate, todayStr, selectedDate, onSelectDate };
   return (
     <View>
       <View style={styles.head}>
-        <Pressable onPress={() => onShift(-1)} style={styles.navBtn}>
+        <Pressable onPress={() => slideTo(-1)} style={styles.navBtn} accessibilityRole="button" accessibilityLabel="Previous month">
           <Ionicons name="chevron-back" size={16} color={colors.slate} />
         </Pressable>
         <Text style={styles.monthLabel}>{monthLabel}</Text>
-        <Pressable onPress={() => onShift(1)} style={styles.navBtn}>
+        <Pressable onPress={() => slideTo(1)} style={styles.navBtn} accessibilityRole="button" accessibilityLabel="Next month">
           <Ionicons name="chevron-forward" size={16} color={colors.slate} />
         </Pressable>
       </View>
@@ -89,6 +149,38 @@ export default function Calendar({ cursor, onShift, events, selectedDate, onSele
           <Text key={i} style={styles.wd}>{w}</Text>
         ))}
       </View>
+      <View style={styles.viewport} onLayout={e => setWidth(e.nativeEvent.layout.width)} {...pan.panHandlers}>
+        <Animated.View style={{ transform: [{ translateX: drag }] }}>
+          <MonthGrid {...monthShift(cursor, 0)} {...gridProps} />
+          {width ? (
+            <>
+              <View style={[styles.side, { left: -width, width }]} pointerEvents="none">
+                <MonthGrid {...monthShift(cursor, -1)} {...gridProps} />
+              </View>
+              <View style={[styles.side, { left: width, width }]} pointerEvents="none">
+                <MonthGrid {...monthShift(cursor, 1)} {...gridProps} />
+              </View>
+            </>
+          ) : null}
+        </Animated.View>
+      </View>
+    </View>
+  );
+}
+
+/* One month's day grid (unchanged from before the swipe). */
+function MonthGrid({ year, month, eventsByDate, todayStr, selectedDate, onSelectDate }) {
+  const startWeekday = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells = [];
+  for (let i = 0; i < startWeekday; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+  while (cells.length % 7 !== 0) cells.push(null);
+  const rows = [];
+  for (let i = 0; i < cells.length; i += 7) rows.push(cells.slice(i, i + 7));
+
+  return (
+    <View>
       {rows.map((row, ri) => (
         <View key={ri} style={styles.weekRow}>
           {row.map((d, di) => {
@@ -136,6 +228,8 @@ const styles = StyleSheet.create({
   monthLabel: { fontWeight: '700', fontSize: 13, color: colors.ink },
   navBtn: { width: 24, height: 24, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
   weekRow: { flexDirection: 'row' },
+  viewport: { overflow: 'hidden' },
+  side: { position: 'absolute', top: 0 },
   wd: { flex: 1, textAlign: 'center', fontSize: 9, fontWeight: '700', color: colors.slate, textTransform: 'uppercase', marginBottom: 3 },
   cell: { flex: 1, aspectRatio: 1, margin: 1.5, alignItems: 'center', justifyContent: 'center' },
   cellTouchable: { borderRadius: radius.sm, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.white },

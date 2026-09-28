@@ -43,7 +43,7 @@ function describeResult(r) {
   return text;
 }
 
-export default function AiEventComposer({ messages, onMessages, onFill }) {
+export default function AiEventComposer({ messages = [], onMessages, onFill }) {
   const { player: me } = useAuth();
 
   async function send(text) {
