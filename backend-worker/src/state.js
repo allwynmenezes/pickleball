@@ -9,7 +9,7 @@ import { json, err, readJson, sha256 } from './util.js';
 /* The Setup step's fields. Only the event's host (createdBy) may change
    them; for anyone else the stored values win. Everything else on an event
    — RSVPs, court claims, roster, scores — stays open to the whole group. */
-const HOST_ONLY_FIELDS = ['name', 'date', 'startTime', 'durationMin', 'courts', 'gameLenMin', 'segments', 'memberIds', 'courtNames', 'createdBy'];
+const HOST_ONLY_FIELDS = ['name', 'date', 'startTime', 'durationMin', 'courts', 'gameLenMin', 'segments', 'memberIds', 'courtNames', 'createdBy', 'aiMessages'];
 
 export async function requesterId(request, db) {
   const [scheme, token] = (request.headers.get('Authorization') || '').split(' ');

@@ -23,12 +23,12 @@ import { buildDraft, MODES } from './eventParse.js';
 
 // Llama 3.3 70B supports Workers AI's JSON mode and is accurate enough for
 // loose phrasing. About 60 neurons a request → ~160 a day on the free plan.
-const DEFAULT_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
-const MAX_TEXT = 500;
+export const DEFAULT_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
+export const MAX_TEXT = 500;
 
 const intVar = (v, fallback) => (Number.isFinite(parseInt(v, 10)) ? parseInt(v, 10) : fallback);
 
-const SCHEMA = {
+export const SCHEMA = {
   type: 'object',
   properties: {
     isEvent: { type: 'boolean' },
@@ -38,6 +38,7 @@ const SCHEMA = {
     endTime: { type: 'string' },
     durationMin: { type: 'integer' },
     courts: { type: 'integer' },
+    playerCount: { type: 'integer' },
     gameLenMin: { type: 'integer' },
     segments: {
       type: 'array',
@@ -50,7 +51,7 @@ const SCHEMA = {
     playerNames: { type: 'array', items: { type: 'string' } },
     inviteEveryone: { type: 'boolean' },
   },
-  required: ['isEvent', 'name', 'date', 'startTime', 'endTime', 'durationMin', 'courts', 'gameLenMin', 'segments', 'playerNames', 'inviteEveryone'],
+  required: ['isEvent', 'name', 'date', 'startTime', 'endTime', 'durationMin', 'courts', 'playerCount', 'gameLenMin', 'segments', 'playerNames', 'inviteEveryone'],
 };
 
 function systemPrompt(today, weekday) {
@@ -62,14 +63,15 @@ Fields (use "" or 0 for anything not mentioned; never invent details):
 - date: YYYY-MM-DD, resolving words like "next Tuesday" from today.
 - startTime, endTime: 24-hour HH:MM. Evening is assumed when am/pm is missing and the hour is 1-7.
 - durationMin: length in minutes, if said as a duration ("for 3 hours").
-- courts: number of courts.
+- courts: how many courts, only if the text says how many. Court numbers are not a count: "courts 3 and 4" is 2 courts, "court 5" is 1. Use 0 if not said — never guess it from the number of players.
+- playerCount: how many people are playing, if the text gives a number ("8 players", "12 of us"), else 0.
 - gameLenMin: length of each game in minutes.
 - segments: how play is organised over time, in order. mode is one of: open (any combination), men (men's doubles), women (women's doubles), mixed (mixed doubles), break (no games). minutes is how long that part lasts; use 0 for "the rest of the session". Use [] if the text doesn't say.
 - playerNames: people named as coming or to be invited, exactly as written.
 - inviteEveryone: true if the text says everyone / all players / the whole group.`;
 }
 
-async function checkLimits(db, playerId, env) {
+export async function checkLimits(db, playerId, env) {
   const now = Date.now();
   const dayStart = now - (now % 86400000);
   const [minute, mine, all] = await db.batch([
@@ -108,6 +110,24 @@ async function askModel(env, text, today, weekday) {
   }
 }
 
+/* The user's local "now" from the request, so "tomorrow" means their
+   tomorrow. The phone's clock is only trusted within a day of the
+   server's (AI_CLOCK_WINDOW_DAYS widens that for the accuracy tests,
+   which replay a fixed date). */
+export function clientClock(body, env = {}) {
+  const tzOffsetMin = Number.isFinite(body.tzOffsetMin) && Math.abs(body.tzOffsetMin) <= 840 ? Math.round(body.tzOffsetMin) : 0;
+  const clientNow = typeof body.now === 'string' ? Date.parse(body.now) : NaN;
+  const nowMs = Number.isFinite(clientNow) && Math.abs(clientNow - Date.now()) < 86400000 * (Number(env.AI_CLOCK_WINDOW_DAYS) || 1) ? clientNow : Date.now();
+  const local = new Date(nowMs + tzOffsetMin * 60000);
+  const offset = `${tzOffsetMin < 0 ? '-' : '+'}${String(Math.floor(Math.abs(tzOffsetMin) / 60)).padStart(2, '0')}:${String(Math.abs(tzOffsetMin) % 60).padStart(2, '0')}`;
+  return {
+    tzOffsetMin,
+    today: local.toISOString().slice(0, 10),
+    weekday: local.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' }),
+    nowLocalIso: `${local.toISOString().slice(0, 19)}${offset}`,
+  };
+}
+
 export async function parseEvent(request, env) {
   if (env.AI_DISABLED === '1' || !env.AI) return err(503, 'Event descriptions are switched off right now. Fill in the form instead.');
   const db = env.DB;
@@ -118,15 +138,7 @@ export async function parseEvent(request, env) {
   const text = typeof body.text === 'string' ? body.text.trim() : '';
   if (text.length < 3) return err(400, 'Describe the event in a few words first.');
   if (text.length > MAX_TEXT) return err(400, `Keep the description under ${MAX_TEXT} characters.`);
-  const tzOffsetMin = Number.isFinite(body.tzOffsetMin) && Math.abs(body.tzOffsetMin) <= 840 ? Math.round(body.tzOffsetMin) : 0;
-  // The user's local "now", so "tomorrow" means their tomorrow. Only
-  // trusted within a day of the server clock.
-  const clientNow = typeof body.now === 'string' ? Date.parse(body.now) : NaN;
-  const nowMs = Number.isFinite(clientNow) && Math.abs(clientNow - Date.now()) < 86400000 ? clientNow : Date.now();
-  const local = new Date(nowMs + tzOffsetMin * 60000);
-  const today = local.toISOString().slice(0, 10);
-  const weekday = local.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' });
-  const nowLocalIso = `${local.toISOString().slice(0, 19)}${tzOffsetMin < 0 ? '-' : '+'}${String(Math.floor(Math.abs(tzOffsetMin) / 60)).padStart(2, '0')}:${String(Math.abs(tzOffsetMin) % 60).padStart(2, '0')}`;
+  const { today, weekday, nowLocalIso, tzOffsetMin } = clientClock(body, env);
 
   const limited = await checkLimits(db, playerId, env);
   if (limited) return err(429, limited);

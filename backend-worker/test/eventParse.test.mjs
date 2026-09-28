@@ -1,7 +1,7 @@
 /* Unit tests for src/eventParse.js — the code-only half of "describe your
    event". No server, no AI calls: run with `npm run test:parse`. */
 import assert from 'node:assert/strict';
-import { extractFromText, buildSegments, matchPlayers, buildDraft } from '../src/eventParse.js';
+import { extractFromText, buildSegments, matchPlayers, buildDraft, buildEdit } from '../src/eventParse.js';
 
 let failures = 0;
 const check = (name, fn) => {
@@ -97,6 +97,31 @@ check('values are clamped', () => {
   assert.equal(r.draft.courts, 20);
   assert.equal(r.draft.gameLenMin, 60);
 });
+check('courts: court numbers are counted, not read as a count', () => {
+  assert.equal(x('Tuesday 6pm on courts 3 and 4').courts, 2);
+  assert.equal(x('Tuesday 6pm, courts 1-3').courts, 3);
+  assert.equal(x('Tuesday 6pm on court 5').courts, 1);
+  assert.equal(x('Tuesday 6pm, courts 2, 4 & 6').courts, 3);
+});
+check('courts: worked out from a stated player count, 4 to a court, rounded down', () => {
+  const c = t => buildDraft(t, null, players, opts).draft.courts;
+  assert.equal(c('Saturday 6 to 10pm, 8 players'), 2);
+  assert.equal(c('Saturday 6 to 10pm, 12 people'), 3);
+  assert.equal(c('Saturday 6 to 10pm, 10 players'), 2);
+  assert.equal(c('Saturday 6 to 10pm, 3 courts, 16 players'), 3, 'a stated court count wins');
+});
+check('courts: worked out from named players when at least 4 are named', () => {
+  const eight = ['Priya', 'Sam', 'Ben', 'Samantha', 'Ann', 'Bo', 'Cy', 'Di'];
+  const r = buildDraft('Saturday 6 to 10pm', { isEvent: true, playerNames: eight }, players, opts);
+  assert.equal(r.draft.courts, 2);
+  assert.equal(r.courtsFrom, 8);
+  assert.ok(r.filled.includes('courts'));
+  assert.equal(buildDraft('Saturday 6 to 10pm', { isEvent: true, playerNames: ['Priya', 'Sam'] }, players, opts).draft.courts, 4, 'two names: keep the default');
+});
+check('courts: "everyone" uses the whole group', () => {
+  const group = Array.from({ length: 9 }, (_, i) => ({ id: `g${i}`, name: `G${i}` }));
+  assert.equal(buildDraft('Saturday 6pm, everyone', { isEvent: true, inviteEveryone: true }, group, opts).draft.courts, 2);
+});
 check('everyone invited', () => assert.equal(buildDraft('Tuesday 6pm, everyone', { isEvent: true, inviteEveryone: true }, players, opts).draft.memberIds.length, 5));
 check('model says not an event and text has nothing → null', () => assert.equal(buildDraft('write me a poem', { isEvent: false, name: 'Poem', courts: 2 }, players, opts), null));
 check('model says not an event even though the text has a date → null', () => assert.equal(buildDraft('what is the weather like tomorrow', { isEvent: false }, players, opts), null));
@@ -104,6 +129,59 @@ check('a past date from the model rolls forward to the next one', () => {
   assert.equal(buildDraft('Christmas eve social', { isEvent: true, date: '2024-12-24' }, players, opts).draft.date, '2026-12-24');
   assert.equal(buildDraft('New year social', { isEvent: true, date: '2026-01-01' }, players, opts).draft.date, '2027-01-01');
 });
+
+console.log('buildEdit');
+{
+  const cur = { name: 'Tuesday Night', date: '2026-09-29', startTime: '18:00', durationMin: 180, courts: 3, gameLenMin: 15,
+    segments: [{ start: '18:00', end: '21:00', modes: {} }], memberIds: ['a', 'd'] };
+  const blank = { understood: true, name: '', date: '', startTime: '', endTime: '', durationMin: 0, courts: 0, playerCount: 0, gameLenMin: 0, segments: [], addPlayers: [], removePlayers: [], inviteEveryone: false };
+  const edit = (text, ai) => buildEdit(text, ai === null ? null : { ...blank, ...ai }, cur, players, opts);
+  check('a start-time change keeps the length and reports old → new', () => {
+    const r = edit('push it back an hour', { startTime: '19:00' });
+    assert.deepEqual(r.changes, { startTime: '19:00' });
+    assert.equal(r.summary, 'Start 6pm → 7pm');
+  });
+  check('"push it back an hour" is not read as a 1-hour event', () => {
+    const r = edit('push it back an hour', { startTime: '19:00' });
+    assert.equal(r.changes.durationMin, undefined);
+  });
+  check('"end at 11" changes the length, not the start', () => {
+    const r = edit('end at 11', { endTime: '23:00' });
+    assert.deepEqual(r.changes, { durationMin: 300 });
+  });
+  check('a full time range in the message is trusted over the model', () => {
+    const r = edit('make it 7 to 9pm', { startTime: '07:00', durationMin: 120 });
+    assert.deepEqual(r.changes, { startTime: '19:00', durationMin: 120 });
+  });
+  check('"add 2 courts" is relative: the model decides, not the text', () => {
+    assert.deepEqual(edit('add 2 courts', { courts: 5 }).changes, { courts: 5 });
+    assert.deepEqual(edit('change to 2 courts', { courts: 0 }).changes, { courts: 2 });
+  });
+  check('a new day from the text', () => assert.deepEqual(edit('move it to Friday', {}).changes, { date: '2026-10-02' }));
+  check('play format for the last hour', () => {
+    const r = edit('mixed for the last hour', { segments: [{ mode: 'open', minutes: 120 }, { mode: 'mixed', minutes: 0 }] });
+    assert.deepEqual(r.changes.segments, [{ start: '18:00', end: '20:00', modes: {} }, { start: '20:00', end: '21:00', modes: { 1: 'mixed', 2: 'mixed', 3: 'mixed' } }]);
+    assert.match(r.summary, /8pm–9pm mixed/);
+  });
+  check('an echoed, unchanged play format is not a change', () => assert.equal(edit('keep it open', { segments: [{ mode: 'open', minutes: 0 }] }), null));
+  check('add and remove players; unknown names reported', () => {
+    const r = edit('add Sam and Zed, drop Ben', { addPlayers: ['Sam', 'Zed'], removePlayers: ['Ben'] });
+    assert.deepEqual(r.changes, { addIds: ['b'], removeIds: ['d'] });
+    assert.deepEqual(r.unmatchedNames, ['Zed']);
+    assert.equal(r.summary, 'Added Sam Lee · Removed Ben');
+  });
+  check('removing someone who isn\'t in the event is reported, not guessed', () => {
+    const r = edit('drop Samantha', { removePlayers: ['Samantha'] });
+    assert.deepEqual(r, { changes: {}, summary: '', unmatchedNames: ['Samantha'] });
+  });
+  check('"now" is not a date change, and repeated current values are ignored', () => {
+    assert.deepEqual(edit('we only have 2 courts now', { courts: 2, date: '2026-09-26' }).changes, { courts: 2 });
+    assert.deepEqual(edit('push it back an hour', { startTime: '19:00', endTime: '21:00' }).changes, { startTime: '19:00' });
+  });
+  check('nothing to change → null', () => assert.equal(edit('thanks!', {}), null));
+  check('works on text alone when the model is down', () => assert.deepEqual(edit('make it 7 to 9pm on 4 courts', null).changes, { startTime: '19:00', durationMin: 120, courts: 4 }));
+  check('a past date from the model rolls forward', () => assert.equal(edit('christmas eve', { date: '2024-12-24' }).changes.date, '2026-12-24'));
+}
 
 if (failures) { console.error(`\n${failures} failed`); process.exit(1); }
 console.log('\nall passed');

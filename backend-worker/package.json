@@ -11,7 +11,8 @@
     "test": "node test/api.test.mjs",
     "db:fresh:local": "node -e \"require('fs').rmSync('.wrangler/state', { recursive: true, force: true })\" && npm run db:init:local",
     "test:parse": "node test/eventParse.test.mjs && node test/ai.test.mjs",
-    "test:accuracy": "node test/accuracy.mjs"
+    "test:accuracy": "node test/accuracy.mjs",
+    "test:edit-accuracy": "node test/editAccuracy.mjs"
   },
   "devDependencies": {
     "wrangler": "^4.140.0"

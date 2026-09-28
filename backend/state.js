@@ -11,7 +11,7 @@ const { db } = require('./db');
    them; for anyone else the stored values win. Everything else on an event
    — RSVPs, court claims, roster, scores — stays open to the whole group.
    (Same rule as the Cloudflare Worker's state.js.) */
-const HOST_ONLY_FIELDS = ['name', 'date', 'startTime', 'durationMin', 'courts', 'gameLenMin', 'segments', 'memberIds', 'courtNames', 'createdBy'];
+const HOST_ONLY_FIELDS = ['name', 'date', 'startTime', 'durationMin', 'courts', 'gameLenMin', 'segments', 'memberIds', 'courtNames', 'createdBy', 'aiMessages'];
 
 /* A new event's host is whoever saves it (never someone they name); a
    non-host's edits to setup fields are reverted; a non-host can't delete an

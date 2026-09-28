@@ -5,7 +5,7 @@
    and 5-a-minute limits — raise them for the dev server while tuning):
 
      npx wrangler login              (once; local dev calls Workers AI remotely)
-     npx wrangler dev --var AI_USER_PER_MINUTE_LIMIT:100 --var AI_USER_DAILY_LIMIT:200
+     npx wrangler dev --var AI_USER_PER_MINUTE_LIMIT:100 --var AI_USER_DAILY_LIMIT:200 --var AI_CLOCK_WINDOW_DAYS:3650
      TOKEN=<session token> npm run test:accuracy
 
    TOKEN is a signed-in session (the Bearer token the app sends). Player
@@ -54,6 +54,8 @@ const SAMPLES = [
   ["Let's do a mixer Friday evening 5:30 - 8, everyone welcome, start with a 30 min warm up break", { date: '2026-10-02', startTime: '17:30', durationMin: 150, everyone: true, segments: ['break', 'open'] }],
   ['the 5th at 6pm for 2.5 hrs', { date: '2026-10-05', startTime: '18:00', durationMin: 150 }],
   ['Tuesday league, 4 courts, 7pm, men only first half hour then open', { date: '2026-09-29', startTime: '19:00', courts: 4, segments: ['men', 'open'] }],
+  ['Saturday 6 to 10pm, 8 players, 15 minute break every hour', { date: '2026-09-26', startTime: '18:00', courts: 2 }],
+  ['Sunday 9am to noon on courts 3 and 4', { date: '2026-09-27', startTime: '09:00', durationMin: 180, courts: 2 }],
   // Not events: should be refused (422).
   ['can you remind me to buy milk', { refused: true }],
   ['what is the weather like tomorrow', { refused: true }],

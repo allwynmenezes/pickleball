@@ -7,6 +7,7 @@
      /api/auth/...                               sign up, login, passwords
      POST /api/ai/parse-event                    describe an event → draft (ai.js)
      POST /api/ai/transcribe                     voice note → text (ai.js)
+     POST /api/ai/edit-event                     change an event by message (aiEdit.js)
      POST /api/admin/import                      one-time data move
      GET /claim/:token                           the invite page people tap */
 import { json, err, readJson, tokensEqual } from './util.js';
@@ -16,6 +17,7 @@ import {
   getPlayerByClaimToken, claimProblem, publicBaseUrl,
 } from './auth.js';
 import { parseEvent, transcribe } from './ai.js';
+import { editEvent } from './aiEdit.js';
 
 const ROUTES = [
   ['GET', '/api/health', () => json({ ok: true })],
@@ -32,6 +34,7 @@ const ROUTES = [
   ['POST', '/api/auth/logout', logout],
   ['POST', '/api/ai/parse-event', parseEvent],
   ['POST', '/api/ai/transcribe', transcribe],
+  ['POST', '/api/ai/edit-event', editEvent],
   ['POST', '/api/admin/import', importData],
   ['GET', '/claim/:token', claimLandingPage],
 ].map(([method, pattern, handler]) => {

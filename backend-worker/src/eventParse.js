@@ -38,8 +38,16 @@ function num(s) {
 /* now: the user's current time (ISO); tzOffsetMin: minutes east of UTC,
    i.e. -Date#getTimezoneOffset() on the phone. Dates are read in the
    user's timezone, never the server's. */
-export function extractFromText(text, { now, tzOffsetMin = 0 } = {}) {
+export function extractFromText(text, opts) {
+  return readText(text, opts).out;
+}
+/* The work behind extractFromText, plus how each value was found (meta),
+   which editing needs: in an edit, a lone "7pm" could be the start or the
+   end, and "an hour" is often a shift ("push it back an hour"), so only
+   unambiguous readings are trusted there. */
+function readText(text, { now, tzOffsetMin = 0 } = {}) {
   const out = {};
+  const meta = { timeRange: false, durationFrom: null };
   const ref = { instant: now ? new Date(now) : new Date(), timezone: tzOffsetMin };
   // Numbers first. Each phrase found is then blanked out, so chrono doesn't
   // also read "games of 20 minutes" as "20 minutes from now".
@@ -60,8 +68,21 @@ export function extractFromText(text, { now, tzOffsetMin = 0 } = {}) {
   const dur = find(new RegExp(`\\bfor\\s+${NUM}${HALF}\\s*(hours?|hrs?|h|minutes?|mins?)\\b${HALF}`, 'i'))
     || find(new RegExp(`\\b${NUM}${HALF}\\s*(hours?|hrs?)\\b${HALF}`, 'i'));
   const statedDuration = dur ? num(dur[1]) * (/^h/i.test(dur[3]) ? 60 : 1) + (dur[2] || dur[4] ? 30 : 0) : undefined;
+  const statedWithFor = !!dur && /^for\b/i.test(dur[0]);
   const courts = find(new RegExp(`\\b${NUM}\\s+courts?\\b`, 'i'));
   if (courts) out.courts = num(courts[1]);
+  else {
+    // Court numbers rather than a count: "courts 3 and 4", "courts 1-3",
+    // "court 5" — the count is how many courts were named.
+    const range = find(/\bcourts?\s*#?\s*(\d{1,2})\s*(?:-|–|to|through|thru)\s*(\d{1,2})\b/i);
+    const list = !range && find(/\bcourts?\s*#?\s*(\d{1,2}(?:\s*(?:,|and|&)\s*#?\d{1,2})*)\b/i);
+    if (range) out.courts = Math.abs(Number(range[2]) - Number(range[1])) + 1;
+    else if (list) out.courts = list[1].match(/\d{1,2}/g).length;
+  }
+  // "8 players", "12 people", "16 of us" — used to work out courts when
+  // the text doesn't say how many.
+  const people = find(new RegExp(`\\b${NUM}\\s+(?:players?|people|persons?|of us|guys|ladies|folks)\\b`, 'i'));
+  if (people) out.playerCount = num(people[1]);
 
   // Wording chrono misses: "7ish", "noon"/"midnight" inside a range
   // ("9 to noon" otherwise loses the 9), and short weekday names.
@@ -77,9 +98,10 @@ export function extractFromText(text, { now, tzOffsetMin = 0 } = {}) {
     .replace(/\bmidnight\b/gi, '12am')
     .replace(/\b(tues|weds|thurs?)\b/gi, m => SHORT_DAYS[m.toLowerCase()]);
 
-  // Date and time. Skip results that are only a duration ("for 3 hours").
+  // Date and time. Skip results that are only a duration ("for 3 hours")
+  // or relative to now ("the last hour", "in 30 minutes").
   const results = chrono.parse(cleaned, ref, { forwardDate: true })
-    .filter(r => !/^\s*for\b/i.test(r.text));
+    .filter(r => !/^\s*for\b/i.test(r.text) && !/\b(hours?|hrs?|minutes?|mins?)\b/i.test(r.text) && !/^\s*(right\s+)?now\s*$/i.test(r.text));
   // Several times can turn up; the best is a range on a named day ("Oct 17
   // from 9 till 1"), then any range, then any time.
   const dayOf = r => r.start.isCertain('day') || r.start.isCertain('weekday');
@@ -123,17 +145,22 @@ export function extractFromText(text, { now, tzOffsetMin = 0 } = {}) {
         if (d <= 0 && !hit.end.isCertain('meridiem') && d + 720 > 0) d += 720;
         if (d <= 0) d += 1440;
         out.durationMin = d;
+        meta.timeRange = true;
+        meta.durationFrom = 'range';
       }
     }
   }
 
   // A start-to-end range beats a stated length: in "men's doubles for an
   // hour, then mixed, 3 to 6pm" the hour is one part of the evening.
-  if (out.durationMin === undefined && statedDuration !== undefined) out.durationMin = statedDuration;
+  if (out.durationMin === undefined && statedDuration !== undefined) {
+    out.durationMin = statedDuration;
+    meta.durationFrom = statedWithFor ? 'for' : 'bare';
+  }
 
   // Keep the key order stable for callers and tests.
-  const { date, startTime, durationMin, courts: c, gameLenMin } = out;
-  return Object.fromEntries(Object.entries({ date, startTime, durationMin, courts: c, gameLenMin }).filter(([, v]) => v !== undefined));
+  const { date, startTime, durationMin, courts: c, gameLenMin, playerCount } = out;
+  return { out: Object.fromEntries(Object.entries({ date, startTime, durationMin, courts: c, gameLenMin, playerCount }).filter(([, v]) => v !== undefined)), meta };
 }
 
 /* ---- Pass 2: merge with the model's guesses and clamp ---- */
@@ -153,6 +180,7 @@ function fromModel(ai) {
     o.durationMin = d;
   }
   if (Number(ai.courts) > 0) o.courts = Number(ai.courts);
+  if (Number(ai.playerCount) > 0) o.playerCount = Number(ai.playerCount);
   if (Number(ai.gameLenMin) > 0) o.gameLenMin = Number(ai.gameLenMin);
   if (Array.isArray(ai.segments)) o.segments = ai.segments;
   if (Array.isArray(ai.playerNames)) o.playerNames = ai.playerNames.filter(n => typeof n === 'string' && n.trim()).map(n => n.trim()).slice(0, 60);
@@ -271,15 +299,10 @@ export function buildDraft(text, ai, players, opts = {}) {
   const date = take('date', today);
   const startTime = take('startTime', DEFAULTS.startTime);
   const durationMin = clamp(take('durationMin', DEFAULTS.durationMin), LIMITS.durationMin);
-  const courts = clamp(take('courts', DEFAULTS.courts), LIMITS.courts);
   const gameLenMin = clamp(take('gameLenMin', DEFAULTS.gameLenMin), LIMITS.gameLenMin);
   let name = model.name;
   if (name) filled.push('name');
   else name = defaultName(filled.includes('date') ? date : null, startTime);
-
-  const hasSegments = Array.isArray(model.segments) && model.segments.some(s => s && s.mode && s.mode !== 'open');
-  if (hasSegments) filled.push('segments');
-  const segments = buildSegments(hasSegments ? model.segments : [], { startTime, durationMin, courts });
 
   let memberIds = [];
   let unmatchedNames = [];
@@ -293,6 +316,146 @@ export function buildDraft(text, ai, players, opts = {}) {
     if (memberIds.length) filled.push('players');
   }
 
+  /* Courts: as stated; otherwise worked out from how many are playing —
+     4 to a court, rounded down, since a court needs 4 and anyone extra
+     rotates in (10 players → 2 courts). The count is a stated number ("8
+     players"), else everyone in the group, else the named players when
+     at least 4 are named (a couple of names alone says little about the
+     turnout). Otherwise the usual default. */
+  let courts = pick('courts');
+  let courtsFrom = null;
+  if (courts !== undefined) filled.push('courts');
+  else {
+    const named = memberIds.length + unmatchedNames.length;
+    const count = pick('playerCount') || (model.inviteEveryone ? players.length : named >= 4 ? named : 0);
+    if (count >= 4) { courts = Math.floor(count / 4); courtsFrom = count; filled.push('courts'); }
+    else courts = DEFAULTS.courts;
+  }
+  courts = clamp(courts, LIMITS.courts);
+
+  const hasSegments = Array.isArray(model.segments) && model.segments.some(s => s && s.mode && s.mode !== 'open');
+  if (hasSegments) filled.push('segments');
+  const segments = buildSegments(hasSegments ? model.segments : [], { startTime, durationMin, courts });
+
   if (!filled.length) return null;
-  return { draft: { name, date, startTime, durationMin, courts, gameLenMin, segments, memberIds }, filled, unmatchedNames };
+  return { draft: { name, date, startTime, durationMin, courts, gameLenMin, segments, memberIds }, filled, unmatchedNames, courtsFrom };
+}
+
+/* ===================== EDITING AN EXISTING EVENT =====================
+   "Move it to 7pm", "add a court", "mixed for the last hour", "add Sam,
+   drop Ben". The model sees the event as it is now and says what should
+   change; code then checks every value the same way as for a new event
+   and keeps only real changes. Returns { changes, summary, unmatchedNames }
+   or null when nothing in the message changes the event.
+
+   changes: { name?, date?, startTime?, durationMin?, courts?, gameLenMin?,
+   segments?, addIds?, removeIds? } — segments are laid out for the event's
+   new start and length, like a new event's. */
+const RELATIVE_COURTS = /\b(add(ing)?|another|more|extra|fewer|less|remove|drop|take away|lose|minus|plus)\b[^.;]*\bcourts?\b/i;
+
+const fmtTime = hhmm => {
+  const [h, m] = hhmm.split(':').map(Number);
+  return `${h % 12 || 12}${m ? `:${pad(m)}` : ''}${h < 12 ? 'am' : 'pm'}`;
+};
+const fmtDay = ymd => new Date(`${ymd}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+const MODE_WORDS = { open: 'any combination', men: "men's", women: "women's", mixed: 'mixed', break: 'break' };
+
+const MENTIONS_DATE = /\b(mon|tue|wed|thu|fri|sat|sun)[a-z]*\b|\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b|\b(today|tonight|tomorrow|tmrw|yesterday|week|weekend|date|day|christmas|eve|holiday)\b|\d{1,2}(st|nd|rd|th)\b|\d{1,2}\/\d{1,2}/i;
+
+export function buildEdit(text, ai, current, players, opts = {}) {
+  if (ai && ai.understood === false && ai.isEvent === false) return null;
+  if (ai) {
+    /* The model sometimes repeats current values back, and a repeated end
+       time next to a new start would silently change the length ("push it
+       back an hour" became a 2-hour event). Drop anything equal to what the
+       event already has, and a date change the message never asked for
+       ("we only have 2 courts now" moved it to today). */
+    const [h, m] = current.startTime.split(':').map(Number);
+    const curEnd = toClock(h * 60 + m + current.durationMin);
+    ai = { ...ai };
+    if (ai.startTime === current.startTime) ai.startTime = '';
+    if (ai.endTime === curEnd) ai.endTime = '';
+    if (Number(ai.durationMin) === current.durationMin) ai.durationMin = 0;
+    if (ai.date === current.date || !MENTIONS_DATE.test(text)) ai.date = '';
+    if (Number(ai.courts) === current.courts) ai.courts = 0;
+    if (Number(ai.gameLenMin) === (current.gameLenMin || DEFAULTS.gameLenMin)) ai.gameLenMin = 0;
+    if (ai.name === current.name) ai.name = '';
+  }
+  const today = opts.now ? opts.now.slice(0, 10) : new Date().toISOString().slice(0, 10);
+  const { out: fromText, meta } = readText(text, opts);
+  // Trust only readings that can't be a relative change: a start–end range
+  // (a lone "7pm" could be the start or the end), "for 3 hours" (a bare
+  // "an hour" is often a shift), and a court count that isn't "add 2".
+  if (!meta.timeRange) delete fromText.startTime;
+  if (meta.durationFrom !== 'range' && meta.durationFrom !== 'for') delete fromText.durationMin;
+  if (RELATIVE_COURTS.test(text)) delete fromText.courts;
+  if (!MENTIONS_DATE.test(text)) delete fromText.date;
+  const model = fromModel(ai ? { ...ai, isEvent: true } : null);
+  if (model.date && model.date < today) {
+    const sameDay = `${today.slice(0, 4)}${model.date.slice(4)}`;
+    const next = sameDay >= today ? sameDay : `${Number(today.slice(0, 4)) + 1}${model.date.slice(4)}`;
+    model.date = isDate(next) ? next : undefined;
+  }
+  const pick = key => (fromText[key] !== undefined ? fromText[key] : model[key]);
+
+  const next = {
+    name: model.name || current.name,
+    date: pick('date') || current.date,
+    startTime: pick('startTime') || current.startTime,
+    durationMin: clamp(pick('durationMin') || current.durationMin, LIMITS.durationMin),
+    courts: pick('courts'),
+    gameLenMin: clamp(pick('gameLenMin') || current.gameLenMin || DEFAULTS.gameLenMin, LIMITS.gameLenMin),
+  };
+  // "End at 11": a new end time keeps the start and changes the length.
+  if (fromText.durationMin === undefined && ai && Number(ai.durationMin) <= 0 && isClock(ai.endTime)) {
+    let d = toMin(ai.endTime) - toMin(next.startTime);
+    if (d <= 0) d += 1440;
+    next.durationMin = clamp(d, LIMITS.durationMin);
+  }
+  if (next.courts === undefined) {
+    const count = pick('playerCount');
+    next.courts = count >= 4 ? Math.floor(count / 4) : current.courts;
+  }
+  next.courts = clamp(next.courts, LIMITS.courts);
+
+  // Players: add from the whole group, remove from this event's members.
+  const members = new Set(current.memberIds || []);
+  const addIds = [], removeIds = [], unmatchedNames = [];
+  if (ai && ai.inviteEveryone === true) players.forEach(p => { if (!members.has(p.id)) addIds.push(p.id); });
+  const addNames = Array.isArray(ai && ai.addPlayers) ? ai.addPlayers.filter(n => typeof n === 'string' && n.trim()) : [];
+  const removeNames = Array.isArray(ai && ai.removePlayers) ? ai.removePlayers.filter(n => typeof n === 'string' && n.trim()) : [];
+  if (addNames.length) {
+    const r = matchPlayers(addNames, players);
+    r.matched.forEach(id => { if (!members.has(id) && !addIds.includes(id)) addIds.push(id); });
+    unmatchedNames.push(...r.unmatched);
+  }
+  if (removeNames.length) {
+    const r = matchPlayers(removeNames, players.filter(p => members.has(p.id)));
+    removeIds.push(...r.matched);
+    unmatchedNames.push(...r.unmatched);
+  }
+
+  const changes = {};
+  const said = [];
+  if (next.name !== current.name) { changes.name = next.name; said.push(`Renamed to "${next.name}"`); }
+  if (next.date !== current.date) { changes.date = next.date; said.push(`Date ${fmtDay(current.date)} → ${fmtDay(next.date)}`); }
+  if (next.startTime !== current.startTime) { changes.startTime = next.startTime; said.push(`Start ${fmtTime(current.startTime)} → ${fmtTime(next.startTime)}`); }
+  if (next.durationMin !== current.durationMin) { changes.durationMin = next.durationMin; said.push(`Length ${current.durationMin} → ${next.durationMin} min`); }
+  if (next.courts !== current.courts) { changes.courts = next.courts; said.push(`Courts ${current.courts} → ${next.courts}`); }
+  if (next.gameLenMin !== (current.gameLenMin || DEFAULTS.gameLenMin)) { changes.gameLenMin = next.gameLenMin; said.push(`Games ${current.gameLenMin || DEFAULTS.gameLenMin} → ${next.gameLenMin} min`); }
+  const hasSegments = Array.isArray(model.segments) && model.segments.length > 0;
+  // The model may repeat the current format back; only a real change counts.
+  const sameSegments = (a, b) => JSON.stringify((a || []).map(s => [s.start, s.end, s.modes || {}])) === JSON.stringify((b || []).map(s => [s.start, s.end, s.modes || {}]));
+  const newSegments = hasSegments ? buildSegments(model.segments, next) : null;
+  if (newSegments && !sameSegments(newSegments, current.segments)) {
+    changes.segments = newSegments;
+    said.push(`Play format: ${changes.segments.map(s => `${fmtTime(s.start)}–${fmtTime(s.end)} ${MODE_WORDS[Object.values(s.modes)[0] || 'open']}`).join(', ')}`);
+  }
+  const nameOf = id => (players.find(p => p.id === id) || {}).name;
+  if (addIds.length) { changes.addIds = addIds; said.push(`Added ${addIds.map(nameOf).join(', ')}`); }
+  if (removeIds.length) { changes.removeIds = removeIds; said.push(`Removed ${removeIds.map(nameOf).join(', ')}`); }
+
+  // Nothing changed but names didn't match: say so rather than nothing.
+  if (!said.length) return unmatchedNames.length ? { changes: {}, summary: '', unmatchedNames } : null;
+  return { changes, summary: said.join(' · '), unmatchedNames };
 }

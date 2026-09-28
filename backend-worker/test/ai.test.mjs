@@ -4,6 +4,7 @@
    AI calls: run with `npm run test:parse`. */
 import assert from 'node:assert/strict';
 import { parseEvent, transcribe } from '../src/ai.js';
+import { editEvent } from '../src/aiEdit.js';
 import { sha256 } from '../src/util.js';
 
 let failures = 0;
@@ -133,6 +134,43 @@ await check('voice: counts toward the same limits', async () => {
   const e = env({ AI: whisper({ text: 'x' }), AI_USER_DAILY_LIMIT: '1' });
   assert.equal((await transcribe(voiceReq(5000), e)).status, 200);
   assert.equal((await transcribe(voiceReq(5000), e)).status, 429);
+});
+
+// ---- Editing: POST /api/ai/edit-event ----
+const curEvent = { name: 'Tuesday Night', date: '2026-09-29', startTime: '18:00', durationMin: 180, courts: 3, gameLenMin: 15, segments: [{ start: '18:00', end: '21:00', modes: {} }], memberIds: ['p1'] };
+const blankEdit = { understood: true, name: '', date: '', startTime: '', endTime: '', durationMin: 0, courts: 0, playerCount: 0, gameLenMin: 0, segments: [], addPlayers: [], removePlayers: [], inviteEveryone: false };
+const editAI = reply => ({ run: async (model, input) => { editAI.last = input; return { response: { ...blankEdit, ...reply } }; } });
+const editReq = (body, token = TOKEN) => new Request('https://x/api/ai/edit-event', {
+  method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+  body: JSON.stringify({ now: new Date().toISOString(), tzOffsetMin: 0, ...body }),
+});
+await check('edit: signed-out request is refused', async () => assert.equal((await editEvent(editReq({ text: 'add a court', event: curEvent }, null), env({ AI: editAI({}) }))).status, 401));
+await check('edit: a malformed event is refused before any AI call', async () => {
+  editAI.last = null;
+  assert.equal((await editEvent(editReq({ text: 'add a court', event: { name: 'x' } }), env({ AI: editAI({}) }))).status, 400);
+  assert.equal(editAI.last, null);
+});
+await check('edit: returns checked changes and a summary written by code', async () => {
+  const res = await editEvent(editReq({ text: 'add a court and add Ben', event: curEvent }), env({ AI: editAI({ courts: 4, addPlayers: ['Ben'] }) }));
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.deepEqual(body.changes, { courts: 4, addIds: ['p2'] });
+  assert.equal(body.summary, 'Courts 3 → 4 · Added Ben Ortiz');
+  assert.match(editAI.last.messages[0].content, /courts: 3/);
+  assert.match(editAI.last.messages[0].content, /players: Priya Shah/);
+});
+await check('edit: something that isn\'t a change gets a helpful 422', async () => {
+  assert.equal((await editEvent(editReq({ text: 'what a game!', event: curEvent }), env({ AI: editAI({ understood: false }) }))).status, 422);
+});
+await check('edit: only unknown names → 422 naming them', async () => {
+  const res = await editEvent(editReq({ text: 'add Zed', event: curEvent }), env({ AI: editAI({ addPlayers: ['Zed'] }) }));
+  assert.equal(res.status, 422);
+  assert.match((await res.json()).error, /Zed/);
+});
+await check('edit: counts toward the same limits', async () => {
+  const e = env({ AI: editAI({ courts: 4 }), AI_USER_DAILY_LIMIT: '1' });
+  assert.equal((await editEvent(editReq({ text: 'add a court', event: curEvent }), e)).status, 200);
+  assert.equal((await editEvent(editReq({ text: 'add a court', event: curEvent }), e)).status, 429);
 });
 
 if (failures) { console.error(`\n${failures} failed`); process.exit(1); }
