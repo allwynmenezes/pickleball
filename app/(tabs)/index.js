@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Platform, Pressable, useWindowDimensions } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { pushOnce } from '../../lib/nav';
 import { Screen, SectionTitle, Card, Row, Badge, EmptyState, BoldPlus } from '../../lib/ui';
@@ -7,11 +8,30 @@ import Calendar, { CalendarLegend } from '../../components/Calendar';
 import { useStore } from '../../lib/store';
 import { useAuth } from '../../lib/auth';
 import { showConfirm } from '../../lib/confirm';
-import { fmtClock, splitEventsByTime } from '../../lib/engine';
+import { fmtClock, splitEventsByTime, eventStatus, STATUS_BADGE } from '../../lib/engine';
 import { colors } from '../../lib/theme';
 
 const WIDE_BREAKPOINT = 760;
 const PAST_PREVIEW = 10;
+const PAST_OPEN_KEY = 'thepickleslot.events.pastOpen';
+
+function StatusBadge({ ev, now }) {
+  const b = STATUS_BADGE[eventStatus(ev, now)];
+  return <Badge label={b.label} kind={b.kind} />;
+}
+
+/* Whether the Past events section is open — remembered on this device. */
+function usePastOpen() {
+  const [open, setOpen] = useState(true);
+  useEffect(() => {
+    AsyncStorage.getItem(PAST_OPEN_KEY).then(v => { if (v === '0') setOpen(false); }).catch(() => {});
+  }, []);
+  const toggle = () => setOpen(v => {
+    AsyncStorage.setItem(PAST_OPEN_KEY, v ? '0' : '1').catch(() => {});
+    return !v;
+  });
+  return [open, toggle];
+}
 
 function fmtDateShort(dateStr) {
   const d = new Date(dateStr + 'T00:00:00');
@@ -45,6 +65,7 @@ export default function EventsScreen() {
   const [cursor, setCursor] = useState(() => { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() }; });
   const [selectedDate, setSelectedDate] = useState(null);
   const [showAllPast, setShowAllPast] = useState(false);
+  const [pastOpen, togglePast] = usePastOpen();
   const now = useNow();
 
   function shift(delta) {
@@ -74,9 +95,9 @@ export default function EventsScreen() {
         {dayEvents.length === 0 ? (
           <Text style={styles.emptyHint}>No events on this day yet. Tap <Text style={styles.emptyHintStrong}>+ New Event</Text> to create one.</Text>
         ) : dayEvents.map(e => (
-          <Row key={e.id} onPress={() => pushOnce(router, { pathname: '/event/[id]', params: { id: e.id } })}>
+          <Row key={e.id} onPress={() => openEvent(e)}>
             <Text style={styles.name} numberOfLines={1}>{e.name}</Text>
-            <Badge label={e.published ? 'Published' : 'Draft'} kind={e.published ? 'ok' : 'wait'} />
+            <StatusBadge ev={e} now={now} />
             <Text style={styles.meta}>{fmtClock(e.startTime)}</Text>
           </Row>
         ))}
@@ -86,14 +107,14 @@ export default function EventsScreen() {
 
   const upcomingBlock = events.length > 0 ? (
     <View>
-      <SectionTitle first={isWideWeb && !selectedDate}>Upcoming events</SectionTitle>
+      <SectionTitle first={isWideWeb && !selectedDate}>Upcoming events ({upcoming.length})</SectionTitle>
       <Card>
         {upcoming.length === 0 ? (
           <Text style={styles.emptyHint}>Nothing coming up. Tap <Text style={styles.emptyHintStrong}>+ New Event</Text> to plan the next one.</Text>
         ) : upcoming.map(e => (
           <Row key={e.id} onPress={() => openEvent(e)}>
             <Text style={styles.name} numberOfLines={1}>{e.name}</Text>
-            <Badge label={e.published ? 'Published' : 'Draft'} kind={e.published ? 'ok' : 'wait'} />
+            <StatusBadge ev={e} now={now} />
             <Text style={styles.meta}>{fmtDateShort(e.date)} · {fmtClock(e.startTime)}</Text>
           </Row>
         ))}
@@ -103,20 +124,23 @@ export default function EventsScreen() {
 
   const pastBlock = past.length > 0 ? (
     <View>
-      <SectionTitle>Past events ({past.length})</SectionTitle>
-      <Card>
-        {pastShown.map(e => (
-          <Row key={e.id} onPress={() => openEvent(e)}>
-            <Text style={[styles.name, styles.pastName]} numberOfLines={1}>{e.name}</Text>
-            <Text style={styles.meta}>{fmtDateShort(e.date)}</Text>
-          </Row>
-        ))}
-        {past.length > PAST_PREVIEW ? (
-          <Pressable onPress={() => setShowAllPast(v => !v)} style={styles.moreBtn} accessibilityRole="button">
-            <Text style={styles.moreText}>{showAllPast ? 'Show fewer' : `Show all ${past.length} past events`}</Text>
-          </Pressable>
-        ) : null}
-      </Card>
+      <SectionTitle onPress={togglePast} expanded={pastOpen}>Past events ({past.length})</SectionTitle>
+      {pastOpen ? (
+        <Card>
+          {pastShown.map(e => (
+            <Row key={e.id} onPress={() => openEvent(e)}>
+              <Text style={[styles.name, styles.pastName]} numberOfLines={1}>{e.name}</Text>
+              <StatusBadge ev={e} now={now} />
+              <Text style={styles.meta}>{fmtDateShort(e.date)}</Text>
+            </Row>
+          ))}
+          {past.length > PAST_PREVIEW ? (
+            <Pressable onPress={() => setShowAllPast(v => !v)} style={styles.moreBtn} accessibilityRole="button">
+              <Text style={styles.moreText}>{showAllPast ? 'Show fewer' : `Show all ${past.length} past events`}</Text>
+            </Pressable>
+          ) : null}
+        </Card>
+      ) : null}
     </View>
   ) : null;
 

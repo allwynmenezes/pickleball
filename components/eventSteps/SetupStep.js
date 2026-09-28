@@ -9,7 +9,7 @@ import {
   addPlayerToEvent, addAllPlayersToEvent, addNewPlayerToEvent, removeEventPlayer, useStore, getPlayerById, editPlayer,
   courtLabelForRange, checkpointEventFlow, playerName,
 } from '../../lib/store';
-import { fmtClock, offsetToClock, toOffset, timeOptions, gameLen, segmentGameLen } from '../../lib/engine';
+import { fmtClock, offsetToClock, toOffset, timeOptions, gameLen, segmentGameLen, eventStatus, STATUS_BADGE } from '../../lib/engine';
 import { colors, radius } from '../../lib/theme';
 
 const GENDERS = [{ label: 'Male', value: 'M' }, { label: 'Female', value: 'F' }, { label: 'Other', value: 'O' }];
@@ -80,7 +80,7 @@ export default function SetupStep({ ev, onDeleteEvent, canEdit, active }) {
     if (saveOnClose && !editing) { checkpointEventFlow(ev.id); setSaveOnClose(false); }
   }, [saveOnClose, editing]);
   normalizeSegments(ev);
-  if (!editing || !canEdit || ev.started) return <SetupSummary ev={ev} canEdit={canEdit && !ev.started} onEdit={() => setEditing(true)} />;
+  if (!editing || !canEdit || ev.started) return <SetupSummary ev={ev} canEdit={canEdit && !ev.started} onEdit={() => setEditing(true)} onDelete={onDeleteEvent} />;
   const courtOpts = Array.from({ length: ev.courts }, (_, i) => i + 1);
 
   return (
@@ -161,7 +161,7 @@ export default function SetupStep({ ev, onDeleteEvent, canEdit, active }) {
   );
 }
 
-function SetupSummary({ ev, canEdit, onEdit }) {
+function SetupSummary({ ev, canEdit, onEdit, onDelete }) {
   const players = useStore(s => s.players);
   const members = (ev.memberIds || []).map(getPlayerById).filter(Boolean);
   const courtOpts = Array.from({ length: ev.courts }, (_, i) => i + 1);
@@ -188,6 +188,7 @@ function SetupSummary({ ev, canEdit, onEdit }) {
       <SectionTitle first>Event</SectionTitle>
       <Card>
         <Text style={styles.summaryName}>{ev.name}</Text>
+        <InfoRow label="Status" value={STATUS_BADGE[eventStatus(ev)].label} />
         <InfoRow label="Host" value={ev.createdBy ? playerName(ev.createdBy) : '—'} />
         <InfoRow label="Date" value={dateLabel} />
         <InfoRow label="Time" value={`${fmtClock(ev.startTime)} – ${fmtClock(offsetToClock(ev, ev.durationMin))} (${ev.durationMin} min)`} />
@@ -223,6 +224,12 @@ function SetupSummary({ ev, canEdit, onEdit }) {
           </Row>
         ))}
       </Card>
+
+      {/* Drafts are often throwaway, so the host can delete one straight from
+          here; published events still go through Edit to be deleted. */}
+      {canEdit && !ev.published ? (
+        <Btn title="Delete draft" icon="trash" variant="ghost" small dangerText onPress={onDelete} style={{ alignSelf: 'flex-end', marginTop: 14 }} />
+      ) : null}
     </View>
   );
 }

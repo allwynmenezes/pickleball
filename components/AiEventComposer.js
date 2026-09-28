@@ -87,7 +87,7 @@ export default function AiEventComposer({ onFill }) {
       onFill({
         name: d.name, date: d.date, startTime: d.startTime,
         durationMin: String(d.durationMin), courts: String(d.courts),
-        gameLenMin: d.gameLenMin, memberIds: d.memberIds, segmentPlan: toSegmentPlan(d.segments),
+        gameLenMin: String(d.gameLenMin), memberIds: d.memberIds, segmentPlan: toSegmentPlan(d.segments),
       });
       setResult(r);
     } catch (e) {

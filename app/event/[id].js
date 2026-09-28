@@ -56,7 +56,7 @@ export default function EventFlowScreen() {
 
   const [draft, setDraft] = useState(() => ({
     name: '', date: params.date || localDateStr(),
-    startTime: '18:00', durationMin: '240', courts: '4',
+    startTime: '18:00', durationMin: '240', courts: '4', gameLenMin: '15',
   }));
 
   const ev = useStore(s => (localEventId ? s.events.find(e => e.id === localEventId) : null));
@@ -135,6 +135,10 @@ export default function EventFlowScreen() {
             <View style={styles.grid2}>
               <TextField label="Duration (min)" value={draft.durationMin} onChangeText={(v) => setDraft({ ...draft, durationMin: v })} keyboardType="number-pad" />
               <TextField label="Courts" value={draft.courts} onChangeText={(v) => setDraft({ ...draft, courts: v })} keyboardType="number-pad" />
+            </View>
+            <View style={styles.grid2}>
+              <TextField label="Game length (min)" value={draft.gameLenMin} onChangeText={(v) => setDraft({ ...draft, gameLenMin: v })} keyboardType="number-pad" />
+              <View style={{ flex: 1 }} />
             </View>
             <View style={styles.pillRow}>
               <Btn title="Create event" onPress={submitDraft} />
