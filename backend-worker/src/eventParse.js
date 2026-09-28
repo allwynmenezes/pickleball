@@ -80,11 +80,30 @@ function readText(text, { now, tzOffsetMin = 0 } = {}) {
     || find(new RegExp(`\\b(?:each|every|per)\\s+(?:game|round)\\b[^0-9]{0,16}?${NUM}${MINS}`, 'i'))
     || find(new RegExp(`\\b${NUM}${MINS}\\s*(?:each|per game|a game|per round|a round)\\b`, 'i'));
   if (game) out.gameLenMin = num(game[1]);
-  const dur = find(new RegExp(`\\bfor\\s+${NUM}${HALF}\\s*(hours?|hrs?|h|minutes?|mins?)\\b${HALF}`, 'i'))
-    || find(new RegExp(`\\b${NUM}${HALF}\\s*(hours?|hrs?)\\b${HALF}`, 'i'));
-  const statedDuration = dur ? num(dur[1]) * (/^h/i.test(dur[3]) ? 60 : 1) + (dur[2] || dur[4] ? 30 : 0) : undefined;
-  const statedWithFor = !!dur && /^for\b/i.test(dur[0]);
-  const courts = find(new RegExp(`\\b${NUM}\\s+courts?\\b`, 'i'));
+  /* The event's length. Several lengths can be mentioned — "for a period
+     of four hours … the games will go on for one hour, then a break" —
+     and only one is the event's: a length right after words about games,
+     modes, breaks or courts is a part of the session, and of the rest the
+     event is the longest. */
+  const PART_WORDS = /\b(games?|rounds?|mixed|men'?s|women'?s|ladies|doubles|open play|any combination|break|court\d*|courts|segment|play)\b[^.;,]{0,20}$/i;
+  const lengths = [];
+  const takeLengths = (re, explicit) => {
+    rest = rest.replace(re, (m, n, half1, unit, half2, idx, all) => {
+      const before = all.slice(Math.max(0, idx - 40), idx);
+      if (explicit === 'for' && PART_WORDS.test(before)) return m; // a part's length
+      lengths.push({ min: num(n) * (/^h/i.test(unit) ? 60 : 1) + (half1 || half2 ? 30 : 0), explicit: !!explicit });
+      return ' ';
+    });
+  };
+  takeLengths(new RegExp(`\\b(?:duration|period|length|span)\\s+of\\s+${NUM}${HALF}\\s*(hours?|hrs?|minutes?|mins?)\\b${HALF}`, 'gi'), 'of');
+  takeLengths(new RegExp(`\\bfor\\s+${NUM}${HALF}\\s*(hours?|hrs?|h|minutes?|mins?)\\b${HALF}`, 'gi'), 'for');
+  takeLengths(new RegExp(`\\b${NUM}${HALF}[\\s-]*(hours?|hrs?)\\b${HALF}`, 'gi'), null);
+  const longest = lengths.sort((a, b) => b.min - a.min)[0];
+  const statedDuration = longest ? longest.min : undefined;
+  const statedWithFor = !!longest && longest.explicit;
+  // "3 courts", "one court" — but not "one court will have mixed, the
+  // other any combination", which is about a court, not how many.
+  const courts = find(new RegExp(`\\b${NUM}\\s+(?:courts\\b|court\\b(?!\\s+(?:will|would|should|can|could|is|has|have|to|gets?|with|be|mixed|men|women|ladies|any|and|or|plays?)\\b))`, 'i'));
   if (courts) out.courts = num(courts[1]);
   else {
     // Court numbers rather than a count: "courts 3 and 4", "courts 1-3",

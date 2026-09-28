@@ -53,6 +53,18 @@ check('"half day" is not a time; the dated range wins', () => assert.deepEqual(
   x('half day event on Oct 17 from 9 till 1, 6 courts, women first 2 hours then mixed'),
   { date: '2026-10-17', startTime: '09:00', durationMin: 240, courts: 6 },
 ));
+check('the event\'s length, not a part\'s, when several are mentioned', () => {
+  const t = 'Next Thursday. The event will span for a duration of four hours. The games will go on for one hour and after one hour there will be a break of ten minutes.';
+  assert.equal(x(t).durationMin, 240);
+  assert.equal(x('the game spanning for a period of four hours').durationMin, 240);
+  assert.equal(x('Tuesday 6pm, mixed for 30 minutes then open').durationMin, undefined, 'a part\'s length is not the event\'s');
+});
+check('"one court will have mixed" is about a court, not a count', () => {
+  assert.equal(x('One court will have a mixed game and the other any combination').courts, undefined);
+  assert.equal(x('Make one court mixed').courts, undefined);
+  assert.equal(x('Tuesday 6pm on 1 court').courts, 1);
+  assert.equal(x('just one court, friday 6pm').courts, 1);
+});
 check('game length, however it\'s put', () => {
   assert.equal(x('Can you update the game length to be 20mins each?').gameLenMin, 20);
   assert.equal(x('game length 12 min').gameLenMin, 12);

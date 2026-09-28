@@ -1,0 +1,3417 @@
+{
+  "now": {
+    "now": "2026-09-26T10:00:00-04:00",
+    "tzOffsetMin": -240,
+    "label": "Saturday 26 Sep 2026, 10:00am (UTC−4)"
+  },
+  "players": [
+    "Priya Shah",
+    "Sam Lee",
+    "Ben Ortiz",
+    "Cleo Park",
+    "Dev Rao",
+    "Fay Adams",
+    "Gus Kim",
+    "Hana Ito",
+    "Ivan Cruz",
+    "Jo Moss",
+    "Kai Reed",
+    "Lena Hart"
+  ],
+  "conventions": [
+    {
+      "id": "C1",
+      "text": "\"next Tuesday\" is the coming Tuesday (29 Sep from Sat 26 Sep); \"this Friday\" is 2 Oct; \"tomorrow\" is 27 Sep."
+    },
+    {
+      "id": "C2",
+      "text": "An hour from 1 to 7 without am/pm means the evening (6:30 → 6:30pm)."
+    },
+    {
+      "id": "C3",
+      "text": "No start time given → 6pm (the app default). No length or end given → 4 hours (the app default)."
+    },
+    {
+      "id": "C4",
+      "text": "Courts not stated → players ÷ 4, rounded down (8 → 2, 10 → 2, 12 → 3). Court numbers count as courts (\"courts 3 and 4\" → 2)."
+    },
+    {
+      "id": "C5",
+      "text": "\"One court X, the other Y\" → court 1 is X, court 2 is Y, for the whole event unless a time is given."
+    },
+    {
+      "id": "C6",
+      "text": "\"A break every hour\" → breaks start on the hour (7:00, 8:00, 9:00 for 6–10pm); play time is shortened, not moved. No break at the start or end."
+    },
+    {
+      "id": "C7",
+      "text": "\"A break after every hour of play\" → a full hour of play, then the break, then the next hour of play (7:00, 8:10, 9:20 with 10-minute breaks for 6–10pm)."
+    },
+    {
+      "id": "C8",
+      "text": "A break stops games on every court unless a court is named. Any time not described is open play (any combination)."
+    },
+    {
+      "id": "C9",
+      "text": "Speech-to-text often hears \"courts\" as \"codes\" or \"cords\"; they mean courts."
+    },
+    {
+      "id": "C10",
+      "text": "In an edit, only what the message changes is returned; the rest stays as it is. A new play format must cover the whole event, keeping the parts the message doesn't mention."
+    }
+  ],
+  "baseEvent": {
+    "name": "Tuesday Night",
+    "date": "2026-09-29",
+    "startTime": "18:00",
+    "durationMin": 180,
+    "courts": 2,
+    "gameLenMin": 15,
+    "segments": [
+      {
+        "start": "18:00",
+        "end": "21:00",
+        "modes": {}
+      }
+    ],
+    "memberIds": [
+      "p1",
+      "p2",
+      "p3",
+      "p4"
+    ],
+    "rows": [
+      [
+        "Date",
+        "Tue, Sep 29"
+      ],
+      [
+        "Time",
+        "6pm – 9pm (180 min)"
+      ],
+      [
+        "Courts",
+        "2"
+      ],
+      [
+        "Game length",
+        "15 min"
+      ],
+      [
+        "Play format",
+        [
+          "6pm–9pm: any combination"
+        ]
+      ],
+      [
+        "Players",
+        "Priya Shah, Sam Lee, Ben Ortiz, Cleo Park"
+      ]
+    ]
+  },
+  "examples": [
+    {
+      "id": "N01",
+      "kind": "create",
+      "category": "Date & time",
+      "text": "Next Tuesday 6 to 9pm, 3 courts",
+      "expect": {
+        "date": "2026-09-29",
+        "startTime": "18:00",
+        "endTime": "21:00",
+        "courts": 3
+      },
+      "model": {
+        "isEvent": true,
+        "name": "",
+        "date": "2026-09-29",
+        "startTime": "18:00",
+        "endTime": "21:00",
+        "durationMin": 0,
+        "courts": 3,
+        "playerCount": 0,
+        "gameLenMin": 0,
+        "segments": [],
+        "playerNames": [],
+        "inviteEveryone": false
+      },
+      "result": {
+        "refused": false,
+        "name": "Tuesday Evening",
+        "rows": [
+          [
+            "Date",
+            "Tue, Sep 29"
+          ],
+          [
+            "Time",
+            "6pm – 9pm (180 min)"
+          ],
+          [
+            "Courts",
+            "3"
+          ],
+          [
+            "Game length",
+            "15 min"
+          ],
+          [
+            "Play format",
+            [
+              "6pm–9pm: any combination"
+            ]
+          ],
+          [
+            "Players",
+            "—"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "N02",
+      "kind": "create",
+      "category": "Date & time",
+      "text": "Tomorrow 7pm for 3 hours",
+      "expect": {
+        "date": "2026-09-27",
+        "startTime": "19:00",
+        "durationMin": 180
+      },
+      "model": {
+        "isEvent": true,
+        "name": "",
+        "date": "2026-09-27",
+        "startTime": "19:00",
+        "endTime": "",
+        "durationMin": 180,
+        "courts": 0,
+        "playerCount": 0,
+        "gameLenMin": 0,
+        "segments": [],
+        "playerNames": [],
+        "inviteEveryone": false
+      },
+      "result": {
+        "refused": false,
+        "name": "Sunday Evening",
+        "rows": [
+          [
+            "Date",
+            "Sun, Sep 27"
+          ],
+          [
+            "Time",
+            "7pm – 10pm (180 min)"
+          ],
+          [
+            "Courts",
+            "4"
+          ],
+          [
+            "Game length",
+            "15 min"
+          ],
+          [
+            "Play format",
+            [
+              "7pm–10pm: any combination"
+            ]
+          ],
+          [
+            "Players",
+            "—"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "N03",
+      "kind": "create",
+      "category": "Date & time",
+      "text": "Friday night 6:30 till 9",
+      "expect": {
+        "date": "2026-10-02",
+        "startTime": "18:30",
+        "endTime": "21:00"
+      },
+      "model": {
+        "isEvent": true,
+        "name": "",
+        "date": "2026-10-02",
+        "startTime": "18:30",
+        "endTime": "21:00",
+        "durationMin": 0,
+        "courts": 0,
+        "playerCount": 0,
+        "gameLenMin": 0,
+        "segments": [],
+        "playerNames": [],
+        "inviteEveryone": false
+      },
+      "result": {
+        "refused": false,
+        "name": "Friday Evening",
+        "rows": [
+          [
+            "Date",
+            "Fri, Oct 2"
+          ],
+          [
+            "Time",
+            "6:30pm – 9pm (150 min)"
+          ],
+          [
+            "Courts",
+            "4"
+          ],
+          [
+            "Game length",
+            "15 min"
+          ],
+          [
+            "Play format",
+            [
+              "6:30pm–9pm: any combination"
+            ]
+          ],
+          [
+            "Players",
+            "—"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "N04",
+      "kind": "create",
+      "category": "Date & time",
+      "text": "Sunday morning 8 to 11, two courts",
+      "expect": {
+        "date": "2026-09-27",
+        "startTime": "08:00",
+        "endTime": "11:00",
+        "courts": 2
+      },
+      "model": {
+        "isEvent": true,
+        "name": "",
+        "date": "2026-09-27",
+        "startTime": "08:00",
+        "endTime": "11:00",
+        "durationMin": 0,
+        "courts": 2,
+        "playerCount": 0,
+        "gameLenMin": 0,
+        "segments": [],
+        "playerNames": [],
+        "inviteEveryone": false
+      },
+      "result": {
+        "refused": false,
+        "name": "Sunday Morning",
+        "rows": [
+          [
+            "Date",
+            "Sun, Sep 27"
+          ],
+          [
+            "Time",
+            "8am – 11am (180 min)"
+          ],
+          [
+            "Courts",
+            "2"
+          ],
+          [
+            "Game length",
+            "15 min"
+          ],
+          [
+            "Play format",
+            [
+              "8am–11am: any combination"
+            ]
+          ],
+          [
+            "Players",
+            "—"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "N05",
+      "kind": "create",
+      "category": "Date & time",
+      "text": "Saturday October 10th, 9am to noon",
+      "expect": {
+        "date": "2026-10-10",
+        "startTime": "09:00",
+        "endTime": "12:00"
+      },
+      "model": {
+        "isEvent": true,
+        "name": "",
+        "date": "2026-10-10",
+        "startTime": "09:00",
+        "endTime": "12:00",
+        "durationMin": 0,
+        "courts": 0,
+        "playerCount": 0,
+        "gameLenMin": 0,
+        "segments": [],
+        "playerNames": [],
+        "inviteEveryone": false
+      },
+      "result": {
+        "refused": false,
+        "name": "Saturday Morning",
+        "rows": [
+          [
+            "Date",
+            "Sat, Oct 10"
+          ],
+          [
+            "Time",
+            "9am – 12pm (180 min)"
+          ],
+          [
+            "Courts",
+            "4"
+          ],
+          [
+            "Game length",
+            "15 min"
+          ],
+          [
+            "Play format",
+            [
+              "9am–12pm: any combination"
+            ]
+          ],
+          [
+            "Players",
+            "—"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "N06",
+      "kind": "create",
+      "category": "Courts & players",
+      "text": "Next Thursday 6 to 10pm with 8 players",
+      "expect": {
+        "date": "2026-10-01",
+        "startTime": "18:00",
+        "endTime": "22:00",
+        "playerCount": 8
+      },
+      "model": {
+        "isEvent": true,
+        "name": "",
+        "date": "2026-10-01",
+        "startTime": "18:00",
+        "endTime": "22:00",
+        "durationMin": 0,
+        "courts": 0,
+        "playerCount": 8,
+        "gameLenMin": 0,
+        "segments": [],
+        "playerNames": [],
+        "inviteEveryone": false
+      },
+      "result": {
+        "refused": false,
+        "name": "Thursday Evening",
+        "rows": [
+          [
+            "Date",
+            "Thu, Oct 1"
+          ],
+          [
+            "Time",
+            "6pm – 10pm (240 min)"
+          ],
+          [
+            "Courts",
+            "2 (8 players ÷ 4)"
+          ],
+          [
+            "Game length",
+            "15 min"
+          ],
+          [
+            "Play format",
+            [
+              "6pm–10pm: any combination"
+            ]
+          ],
+          [
+            "Players",
+            "—"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "N07",
+      "kind": "create",
+      "category": "Courts & players",
+      "text": "Wednesday 7 to 9, twelve of us",
+      "expect": {
+        "date": "2026-09-30",
+        "startTime": "19:00",
+        "endTime": "21:00",
+        "playerCount": 12
+      },
+      "model": {
+        "isEvent": true,
+        "name": "",
+        "date": "2026-09-30",
+        "startTime": "19:00",
+        "endTime": "21:00",
+        "durationMin": 0,
+        "courts": 0,
+        "playerCount": 12,
+        "gameLenMin": 0,
+        "segments": [],
+        "playerNames": [],
+        "inviteEveryone": false
+      },
+      "result": {
+        "refused": false,
+        "name": "Wednesday Evening",
+        "rows": [
+          [
+            "Date",
+            "Wed, Sep 30"
+          ],
+          [
+            "Time",
+            "7pm – 9pm (120 min)"
+          ],
+          [
+            "Courts",
+            "3 (12 players ÷ 4)"
+          ],
+          [
+            "Game length",
+            "15 min"
+          ],
+          [
+            "Play format",
+            [
+              "7pm–9pm: any combination"
+            ]
+          ],
+          [
+            "Players",
+            "—"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "N08",
+      "kind": "create",
+      "category": "Courts & players",
+      "text": "Tuesday 6pm on courts 3 and 4 for 2 hours",
+      "expect": {
+        "date": "2026-09-29",
+        "startTime": "18:00",
+        "durationMin": 120,
+        "courts": 2
+      },
+      "model": {
+        "isEvent": true,
+        "name": "",
+        "date": "2026-09-29",
+        "startTime": "18:00",
+        "endTime": "",
+        "durationMin": 120,
+        "courts": 2,
+        "playerCount": 0,
+        "gameLenMin": 0,
+        "segments": [],
+        "playerNames": [],
+        "inviteEveryone": false
+      },
+      "result": {
+        "refused": false,
+        "name": "Tuesday Evening",
+        "rows": [
+          [
+            "Date",
+            "Tue, Sep 29"
+          ],
+          [
+            "Time",
+            "6pm – 8pm (120 min)"
+          ],
+          [
+            "Courts",
+            "2"
+          ],
+          [
+            "Game length",
+            "15 min"
+          ],
+          [
+            "Play format",
+            [
+              "6pm–8pm: any combination"
+            ]
+          ],
+          [
+            "Players",
+            "—"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "N09",
+      "kind": "create",
+      "category": "Courts & players",
+      "text": "Monday 6 to 8pm, invite everyone",
+      "expect": {
+        "date": "2026-09-28",
+        "startTime": "18:00",
+        "endTime": "20:00",
+        "inviteEveryone": true
+      },
+      "model": {
+        "isEvent": true,
+        "name": "",
+        "date": "2026-09-28",
+        "startTime": "18:00",
+        "endTime": "20:00",
+        "durationMin": 0,
+        "courts": 0,
+        "playerCount": 0,
+        "gameLenMin": 0,
+        "segments": [],
+        "playerNames": [],
+        "inviteEveryone": true
+      },
+      "result": {
+        "refused": false,
+        "name": "Monday Evening",
+        "rows": [
+          [
+            "Date",
+            "Mon, Sep 28"
+          ],
+          [
+            "Time",
+            "6pm – 8pm (120 min)"
+          ],
+          [
+            "Courts",
+            "3 (12 players ÷ 4)"
+          ],
+          [
+            "Game length",
+            "15 min"
+          ],
+          [
+            "Play format",
+            [
+              "6pm–8pm: any combination"
+            ]
+          ],
+          [
+            "Players",
+            "Priya Shah, Sam Lee, Ben Ortiz, Cleo Park, Dev Rao, Fay Adams, Gus Kim, Hana Ito, Ivan Cruz, Jo Moss, Kai Reed, Lena Hart"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "N10",
+      "kind": "create",
+      "category": "Courts & players",
+      "text": "Friday 6 to 9 with Priya, Sam, Ben, Cleo, Dev, Fay, Gus and Hana",
+      "expect": {
+        "date": "2026-10-02",
+        "startTime": "18:00",
+        "endTime": "21:00",
+        "playerNames": [
+          "Priya",
+          "Sam",
+          "Ben",
+          "Cleo",
+          "Dev",
+          "Fay",
+          "Gus",
+          "Hana"
+        ]
+      },
+      "model": {
+        "isEvent": true,
+        "name": "",
+        "date": "2026-10-02",
+        "startTime": "18:00",
+        "endTime": "21:00",
+        "durationMin": 0,
+        "courts": 0,
+        "playerCount": 0,
+        "gameLenMin": 0,
+        "segments": [],
+        "playerNames": [
+          "Priya",
+          "Sam",
+          "Ben",
+          "Cleo",
+          "Dev",
+          "Fay",
+          "Gus",
+          "Hana"
+        ],
+        "inviteEveryone": false
+      },
+      "result": {
+        "refused": false,
+        "name": "Friday Evening",
+        "rows": [
+          [
+            "Date",
+            "Fri, Oct 2"
+          ],
+          [
+            "Time",
+            "6pm – 9pm (180 min)"
+          ],
+          [
+            "Courts",
+            "2 (8 players ÷ 4)"
+          ],
+          [
+            "Game length",
+            "15 min"
+          ],
+          [
+            "Play format",
+            [
+              "6pm–9pm: any combination"
+            ]
+          ],
+          [
+            "Players",
+            "Priya Shah, Sam Lee, Ben Ortiz, Cleo Park, Dev Rao, Fay Adams, Gus Kim, Hana Ito"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "N11",
+      "kind": "create",
+      "category": "Game length",
+      "text": "Tuesday 6 to 9pm, 20 minute games",
+      "expect": {
+        "date": "2026-09-29",
+        "startTime": "18:00",
+        "endTime": "21:00",
+        "gameLenMin": 20
+      },
+      "model": {
+        "isEvent": true,
+        "name": "",
+        "date": "2026-09-29",
+        "startTime": "18:00",
+        "endTime": "21:00",
+        "durationMin": 0,
+        "courts": 0,
+        "playerCount": 0,
+        "gameLenMin": 20,
+        "segments": [],
+        "playerNames": [],
+        "inviteEveryone": false
+      },
+      "result": {
+        "refused": false,
+        "name": "Tuesday Evening",
+        "rows": [
+          [
+            "Date",
+            "Tue, Sep 29"
+          ],
+          [
+            "Time",
+            "6pm – 9pm (180 min)"
+          ],
+          [
+            "Courts",
+            "4"
+          ],
+          [
+            "Game length",
+            "20 min"
+          ],
+          [
+            "Play format",
+            [
+              "6pm–9pm: any combination"
+            ]
+          ],
+          [
+            "Players",
+            "—"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "N12",
+      "kind": "create",
+      "category": "Game length",
+      "text": "Thursday 7pm for 2 hours, game length 12 minutes each",
+      "expect": {
+        "date": "2026-10-01",
+        "startTime": "19:00",
+        "durationMin": 120,
+        "gameLenMin": 12
+      },
+      "model": {
+        "isEvent": true,
+        "name": "",
+        "date": "2026-10-01",
+        "startTime": "19:00",
+        "endTime": "",
+        "durationMin": 120,
+        "courts": 0,
+        "playerCount": 0,
+        "gameLenMin": 12,
+        "segments": [],
+        "playerNames": [],
+        "inviteEveryone": false
+      },
+      "result": {
+        "refused": false,
+        "name": "Thursday Evening",
+        "rows": [
+          [
+            "Date",
+            "Thu, Oct 1"
+          ],
+          [
+            "Time",
+            "7pm – 9pm (120 min)"
+          ],
+          [
+            "Courts",
+            "4"
+          ],
+          [
+            "Game length",
+            "12 min"
+          ],
+          [
+            "Play format",
+            [
+              "7pm–9pm: any combination"
+            ]
+          ],
+          [
+            "Players",
+            "—"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "N13",
+      "kind": "create",
+      "category": "Modes per court",
+      "text": "Saturday 6 to 9pm, 2 courts, court 1 mixed and court 2 any combination",
+      "expect": {
+        "date": "2026-09-26",
+        "startTime": "18:00",
+        "endTime": "21:00",
+        "courts": 2,
+        "segments": [
+          {
+            "start": "18:00",
+            "end": "21:00",
+            "mode": "open",
+            "courtModes": [
+              {
+                "court": 1,
+                "mode": "mixed"
+              }
+            ]
+          }
+        ]
+      },
+      "model": {
+        "isEvent": true,
+        "name": "",
+        "date": "2026-09-26",
+        "startTime": "18:00",
+        "endTime": "21:00",
+        "durationMin": 0,
+        "courts": 2,
+        "playerCount": 0,
+        "gameLenMin": 0,
+        "segments": [
+          {
+            "start": "18:00",
+            "end": "21:00",
+            "mode": "open",
+            "courtModes": [
+              {
+                "court": 1,
+                "mode": "mixed"
+              }
+            ]
+          }
+        ],
+        "playerNames": [],
+        "inviteEveryone": false
+      },
+      "result": {
+        "refused": false,
+        "name": "Saturday Evening",
+        "rows": [
+          [
+            "Date",
+            "Sat, Sep 26"
+          ],
+          [
+            "Time",
+            "6pm – 9pm (180 min)"
+          ],
+          [
+            "Courts",
+            "2"
+          ],
+          [
+            "Game length",
+            "15 min"
+          ],
+          [
+            "Play format",
+            [
+              "6pm–9pm: court 1 mixed, court 2 any combination"
+            ]
+          ],
+          [
+            "Players",
+            "—"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "N14",
+      "kind": "create",
+      "category": "Modes per court",
+      "text": "Sunday 4 to 7pm, 3 courts: court 1 men's, court 2 women's, court 3 mixed",
+      "expect": {
+        "date": "2026-09-27",
+        "startTime": "16:00",
+        "endTime": "19:00",
+        "courts": 3,
+        "segments": [
+          {
+            "start": "16:00",
+            "end": "19:00",
+            "mode": "open",
+            "courtModes": [
+              {
+                "court": 1,
+                "mode": "men"
+              },
+              {
+                "court": 2,
+                "mode": "women"
+              },
+              {
+                "court": 3,
+                "mode": "mixed"
+              }
+            ]
+          }
+        ]
+      },
+      "model": {
+        "isEvent": true,
+        "name": "",
+        "date": "2026-09-27",
+        "startTime": "16:00",
+        "endTime": "19:00",
+        "durationMin": 0,
+        "courts": 3,
+        "playerCount": 0,
+        "gameLenMin": 0,
+        "segments": [
+          {
+            "start": "16:00",
+            "end": "19:00",
+            "mode": "open",
+            "courtModes": [
+              {
+                "court": 1,
+                "mode": "men"
+              },
+              {
+                "court": 2,
+                "mode": "women"
+              },
+              {
+                "court": 3,
+                "mode": "mixed"
+              }
+            ]
+          }
+        ],
+        "playerNames": [],
+        "inviteEveryone": false
+      },
+      "result": {
+        "refused": false,
+        "name": "Sunday Afternoon",
+        "rows": [
+          [
+            "Date",
+            "Sun, Sep 27"
+          ],
+          [
+            "Time",
+            "4pm – 7pm (180 min)"
+          ],
+          [
+            "Courts",
+            "3"
+          ],
+          [
+            "Game length",
+            "15 min"
+          ],
+          [
+            "Play format",
+            [
+              "4pm–7pm: court 1 men's, court 2 women's, court 3 mixed"
+            ]
+          ],
+          [
+            "Players",
+            "—"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "N15",
+      "kind": "create",
+      "category": "Modes per court",
+      "text": "Friday 6 to 9, 3 courts. First hour court 1 mixed, court 2 mens and court 3 womens. Second hour all mixed. Last hour open",
+      "expect": {
+        "date": "2026-10-02",
+        "startTime": "18:00",
+        "endTime": "21:00",
+        "courts": 3,
+        "segments": [
+          {
+            "start": "18:00",
+            "end": "19:00",
+            "mode": "open",
+            "courtModes": [
+              {
+                "court": 1,
+                "mode": "mixed"
+              },
+              {
+                "court": 2,
+                "mode": "men"
+              },
+              {
+                "court": 3,
+                "mode": "women"
+              }
+            ]
+          },
+          {
+            "start": "19:00",
+            "end": "20:00",
+            "mode": "mixed",
+            "courtModes": []
+          },
+          {
+            "start": "20:00",
+            "end": "21:00",
+            "mode": "open",
+            "courtModes": []
+          }
+        ]
+      },
+      "model": {
+        "isEvent": true,
+        "name": "",
+        "date": "2026-10-02",
+        "startTime": "18:00",
+        "endTime": "21:00",
+        "durationMin": 0,
+        "courts": 3,
+        "playerCount": 0,
+        "gameLenMin": 0,
+        "segments": [
+          {
+            "start": "18:00",
+            "end": "19:00",
+            "mode": "open",
+            "courtModes": [
+              {
+                "court": 1,
+                "mode": "mixed"
+              },
+              {
+                "court": 2,
+                "mode": "men"
+              },
+              {
+                "court": 3,
+                "mode": "women"
+              }
+            ]
+          },
+          {
+            "start": "19:00",
+            "end": "20:00",
+            "mode": "mixed",
+            "courtModes": []
+          },
+          {
+            "start": "20:00",
+            "end": "21:00",
+            "mode": "open",
+            "courtModes": []
+          }
+        ],
+        "playerNames": [],
+        "inviteEveryone": false
+      },
+      "result": {
+        "refused": false,
+        "name": "Friday Evening",
+        "rows": [
+          [
+            "Date",
+            "Fri, Oct 2"
+          ],
+          [
+            "Time",
+            "6pm – 9pm (180 min)"
+          ],
+          [
+            "Courts",
+            "3"
+          ],
+          [
+            "Game length",
+            "15 min"
+          ],
+          [
+            "Play format",
+            [
+              "6pm–7pm: court 1 mixed, court 2 men's, court 3 women's",
+              "7pm–8pm: mixed",
+              "8pm–9pm: any combination"
+            ]
+          ],
+          [
+            "Players",
+            "—"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "N16",
+      "kind": "create",
+      "category": "Modes per court",
+      "text": "Tuesday 6-10pm, 2 courts, court 1 women's doubles the whole time, court 2 open",
+      "expect": {
+        "date": "2026-09-29",
+        "startTime": "18:00",
+        "endTime": "22:00",
+        "courts": 2,
+        "segments": [
+          {
+            "start": "18:00",
+            "end": "22:00",
+            "mode": "open",
+            "courtModes": [
+              {
+                "court": 1,
+                "mode": "women"
+              }
+            ]
+          }
+        ]
+      },
+      "model": {
+        "isEvent": true,
+        "name": "",
+        "date": "2026-09-29",
+        "startTime": "18:00",
+        "endTime": "22:00",
+        "durationMin": 0,
+        "courts": 2,
+        "playerCount": 0,
+        "gameLenMin": 0,
+        "segments": [
+          {
+            "start": "18:00",
+            "end": "22:00",
+            "mode": "open",
+            "courtModes": [
+              {
+                "court": 1,
+                "mode": "women"
+              }
+            ]
+          }
+        ],
+        "playerNames": [],
+        "inviteEveryone": false
+      },
+      "result": {
+        "refused": false,
+        "name": "Tuesday Evening",
+        "rows": [
+          [
+            "Date",
+            "Tue, Sep 29"
+          ],
+          [
+            "Time",
+            "6pm – 10pm (240 min)"
+          ],
+          [
+            "Courts",
+            "2"
+          ],
+          [
+            "Game length",
+            "15 min"
+          ],
+          [
+            "Play format",
+            [
+              "6pm–10pm: court 1 women's, court 2 any combination"
+            ]
+          ],
+          [
+            "Players",
+            "—"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "N17",
+      "kind": "create",
+      "category": "Modes per court",
+      "text": "Thursday 6 to 8pm, 2 courts, mixed doubles for the first hour then open play on both",
+      "expect": {
+        "date": "2026-10-01",
+        "startTime": "18:00",
+        "endTime": "20:00",
+        "courts": 2,
+        "segments": [
+          {
+            "start": "18:00",
+            "end": "19:00",
+            "mode": "mixed",
+            "courtModes": []
+          },
+          {
+            "start": "19:00",
+            "end": "20:00",
+            "mode": "open",
+            "courtModes": []
+          }
+        ]
+      },
+      "model": {
+        "isEvent": true,
+        "name": "",
+        "date": "2026-10-01",
+        "startTime": "18:00",
+        "endTime": "20:00",
+        "durationMin": 0,
+        "courts": 2,
+        "playerCount": 0,
+        "gameLenMin": 0,
+        "segments": [
+          {
+            "start": "18:00",
+            "end": "19:00",
+            "mode": "mixed",
+            "courtModes": []
+          },
+          {
+            "start": "19:00",
+            "end": "20:00",
+            "mode": "open",
+            "courtModes": []
+          }
+        ],
+        "playerNames": [],
+        "inviteEveryone": false
+      },
+      "result": {
+        "refused": false,
+        "name": "Thursday Evening",
+        "rows": [
+          [
+            "Date",
+            "Thu, Oct 1"
+          ],
+          [
+            "Time",
+            "6pm – 8pm (120 min)"
+          ],
+          [
+            "Courts",
+            "2"
+          ],
+          [
+            "Game length",
+            "15 min"
+          ],
+          [
+            "Play format",
+            [
+              "6pm–7pm: mixed",
+              "7pm–8pm: any combination"
+            ]
+          ],
+          [
+            "Players",
+            "—"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "N18",
+      "kind": "create",
+      "category": "Breaks",
+      "text": "Saturday 6 to 10pm, 2 courts, 15 minute break every hour",
+      "convention": "C6",
+      "expect": {
+        "date": "2026-09-26",
+        "startTime": "18:00",
+        "endTime": "22:00",
+        "courts": 2,
+        "segments": [
+          {
+            "start": "19:00",
+            "end": "19:15",
+            "mode": "break",
+            "courtModes": []
+          },
+          {
+            "start": "20:00",
+            "end": "20:15",
+            "mode": "break",
+            "courtModes": []
+          },
+          {
+            "start": "21:00",
+            "end": "21:15",
+            "mode": "break",
+            "courtModes": []
+          }
+        ]
+      },
+      "model": {
+        "isEvent": true,
+        "name": "",
+        "date": "2026-09-26",
+        "startTime": "18:00",
+        "endTime": "22:00",
+        "durationMin": 0,
+        "courts": 2,
+        "playerCount": 0,
+        "gameLenMin": 0,
+        "segments": [
+          {
+            "start": "19:00",
+            "end": "19:15",
+            "mode": "break",
+            "courtModes": []
+          },
+          {
+            "start": "20:00",
+            "end": "20:15",
+            "mode": "break",
+            "courtModes": []
+          },
+          {
+            "start": "21:00",
+            "end": "21:15",
+            "mode": "break",
+            "courtModes": []
+          }
+        ],
+        "playerNames": [],
+        "inviteEveryone": false
+      },
+      "result": {
+        "refused": false,
+        "name": "Saturday Evening",
+        "rows": [
+          [
+            "Date",
+            "Sat, Sep 26"
+          ],
+          [
+            "Time",
+            "6pm – 10pm (240 min)"
+          ],
+          [
+            "Courts",
+            "2"
+          ],
+          [
+            "Game length",
+            "15 min"
+          ],
+          [
+            "Play format",
+            [
+              "6pm–7pm: any combination",
+              "7pm–7:15pm: break",
+              "7:15pm–8pm: any combination",
+              "8pm–8:15pm: break",
+              "8:15pm–9pm: any combination",
+              "9pm–9:15pm: break",
+              "9:15pm–10pm: any combination"
+            ]
+          ],
+          [
+            "Players",
+            "—"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "N19",
+      "kind": "create",
+      "category": "Breaks",
+      "text": "Wednesday 6 to 10pm, 2 courts, 10 minute break after every hour of play",
+      "convention": "C7",
+      "expect": {
+        "date": "2026-09-30",
+        "startTime": "18:00",
+        "endTime": "22:00",
+        "courts": 2,
+        "segments": [
+          {
+            "start": "19:00",
+            "end": "19:10",
+            "mode": "break",
+            "courtModes": []
+          },
+          {
+            "start": "20:10",
+            "end": "20:20",
+            "mode": "break",
+            "courtModes": []
+          },
+          {
+            "start": "21:20",
+            "end": "21:30",
+            "mode": "break",
+            "courtModes": []
+          }
+        ]
+      },
+      "model": {
+        "isEvent": true,
+        "name": "",
+        "date": "2026-09-30",
+        "startTime": "18:00",
+        "endTime": "22:00",
+        "durationMin": 0,
+        "courts": 2,
+        "playerCount": 0,
+        "gameLenMin": 0,
+        "segments": [
+          {
+            "start": "19:00",
+            "end": "19:10",
+            "mode": "break",
+            "courtModes": []
+          },
+          {
+            "start": "20:10",
+            "end": "20:20",
+            "mode": "break",
+            "courtModes": []
+          },
+          {
+            "start": "21:20",
+            "end": "21:30",
+            "mode": "break",
+            "courtModes": []
+          }
+        ],
+        "playerNames": [],
+        "inviteEveryone": false
+      },
+      "result": {
+        "refused": false,
+        "name": "Wednesday Evening",
+        "rows": [
+          [
+            "Date",
+            "Wed, Sep 30"
+          ],
+          [
+            "Time",
+            "6pm – 10pm (240 min)"
+          ],
+          [
+            "Courts",
+            "2"
+          ],
+          [
+            "Game length",
+            "15 min"
+          ],
+          [
+            "Play format",
+            [
+              "6pm–7pm: any combination",
+              "7pm–7:10pm: break",
+              "7:10pm–8:10pm: any combination",
+              "8:10pm–8:20pm: break",
+              "8:20pm–9:20pm: any combination",
+              "9:20pm–9:30pm: break",
+              "9:30pm–10pm: any combination"
+            ]
+          ],
+          [
+            "Players",
+            "—"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "N20",
+      "kind": "create",
+      "category": "Breaks",
+      "text": "Friday 7 to 10pm, a 30 minute break at 8:30",
+      "expect": {
+        "date": "2026-10-02",
+        "startTime": "19:00",
+        "endTime": "22:00",
+        "segments": [
+          {
+            "start": "20:30",
+            "end": "21:00",
+            "mode": "break",
+            "courtModes": []
+          }
+        ]
+      },
+      "model": {
+        "isEvent": true,
+        "name": "",
+        "date": "2026-10-02",
+        "startTime": "19:00",
+        "endTime": "22:00",
+        "durationMin": 0,
+        "courts": 0,
+        "playerCount": 0,
+        "gameLenMin": 0,
+        "segments": [
+          {
+            "start": "20:30",
+            "end": "21:00",
+            "mode": "break",
+            "courtModes": []
+          }
+        ],
+        "playerNames": [],
+        "inviteEveryone": false
+      },
+      "result": {
+        "refused": false,
+        "name": "Friday Evening",
+        "rows": [
+          [
+            "Date",
+            "Fri, Oct 2"
+          ],
+          [
+            "Time",
+            "7pm – 10pm (180 min)"
+          ],
+          [
+            "Courts",
+            "4"
+          ],
+          [
+            "Game length",
+            "15 min"
+          ],
+          [
+            "Play format",
+            [
+              "7pm–8:30pm: any combination",
+              "8:30pm–9pm: break",
+              "9pm–10pm: any combination"
+            ]
+          ],
+          [
+            "Players",
+            "—"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "N21",
+      "kind": "create",
+      "category": "Breaks",
+      "text": "Sunday 2 to 5pm, 2 courts, court 1 mixed and court 2 open, with a 15 minute break at 3:30",
+      "expect": {
+        "date": "2026-09-27",
+        "startTime": "14:00",
+        "endTime": "17:00",
+        "courts": 2,
+        "segments": [
+          {
+            "start": "14:00",
+            "end": "15:30",
+            "mode": "open",
+            "courtModes": [
+              {
+                "court": 1,
+                "mode": "mixed"
+              }
+            ]
+          },
+          {
+            "start": "15:30",
+            "end": "15:45",
+            "mode": "break",
+            "courtModes": []
+          },
+          {
+            "start": "15:45",
+            "end": "17:00",
+            "mode": "open",
+            "courtModes": [
+              {
+                "court": 1,
+                "mode": "mixed"
+              }
+            ]
+          }
+        ]
+      },
+      "model": {
+        "isEvent": true,
+        "name": "",
+        "date": "2026-09-27",
+        "startTime": "14:00",
+        "endTime": "17:00",
+        "durationMin": 0,
+        "courts": 2,
+        "playerCount": 0,
+        "gameLenMin": 0,
+        "segments": [
+          {
+            "start": "14:00",
+            "end": "15:30",
+            "mode": "open",
+            "courtModes": [
+              {
+                "court": 1,
+                "mode": "mixed"
+              }
+            ]
+          },
+          {
+            "start": "15:30",
+            "end": "15:45",
+            "mode": "break",
+            "courtModes": []
+          },
+          {
+            "start": "15:45",
+            "end": "17:00",
+            "mode": "open",
+            "courtModes": [
+              {
+                "court": 1,
+                "mode": "mixed"
+              }
+            ]
+          }
+        ],
+        "playerNames": [],
+        "inviteEveryone": false
+      },
+      "result": {
+        "refused": false,
+        "name": "Sunday Afternoon",
+        "rows": [
+          [
+            "Date",
+            "Sun, Sep 27"
+          ],
+          [
+            "Time",
+            "2pm – 5pm (180 min)"
+          ],
+          [
+            "Courts",
+            "2"
+          ],
+          [
+            "Game length",
+            "15 min"
+          ],
+          [
+            "Play format",
+            [
+              "2pm–3:30pm: court 1 mixed, court 2 any combination",
+              "3:30pm–3:45pm: break",
+              "3:45pm–5pm: court 1 mixed, court 2 any combination"
+            ]
+          ],
+          [
+            "Players",
+            "—"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "N22",
+      "kind": "create",
+      "category": "Breaks",
+      "text": "Tuesday 6 to 9pm, men's doubles for an hour, then a 15 minute break, then mixed",
+      "expect": {
+        "date": "2026-09-29",
+        "startTime": "18:00",
+        "endTime": "21:00",
+        "segments": [
+          {
+            "start": "18:00",
+            "end": "19:00",
+            "mode": "men",
+            "courtModes": []
+          },
+          {
+            "start": "19:00",
+            "end": "19:15",
+            "mode": "break",
+            "courtModes": []
+          },
+          {
+            "start": "19:15",
+            "end": "21:00",
+            "mode": "mixed",
+            "courtModes": []
+          }
+        ]
+      },
+      "model": {
+        "isEvent": true,
+        "name": "",
+        "date": "2026-09-29",
+        "startTime": "18:00",
+        "endTime": "21:00",
+        "durationMin": 0,
+        "courts": 0,
+        "playerCount": 0,
+        "gameLenMin": 0,
+        "segments": [
+          {
+            "start": "18:00",
+            "end": "19:00",
+            "mode": "men",
+            "courtModes": []
+          },
+          {
+            "start": "19:00",
+            "end": "19:15",
+            "mode": "break",
+            "courtModes": []
+          },
+          {
+            "start": "19:15",
+            "end": "21:00",
+            "mode": "mixed",
+            "courtModes": []
+          }
+        ],
+        "playerNames": [],
+        "inviteEveryone": false
+      },
+      "result": {
+        "refused": false,
+        "name": "Tuesday Evening",
+        "rows": [
+          [
+            "Date",
+            "Tue, Sep 29"
+          ],
+          [
+            "Time",
+            "6pm – 9pm (180 min)"
+          ],
+          [
+            "Courts",
+            "4"
+          ],
+          [
+            "Game length",
+            "15 min"
+          ],
+          [
+            "Play format",
+            [
+              "6pm–7pm: men's",
+              "7pm–7:15pm: break",
+              "7:15pm–9pm: mixed"
+            ]
+          ],
+          [
+            "Players",
+            "—"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "N23",
+      "kind": "create",
+      "category": "Long spoken descriptions",
+      "convention": "C3, C5",
+      "text": "Create a game for next Wednesday with eight players and the game spanning for a period of four hours. There are Priya, Sam, Ben, Cleo, Dev, Fay, Gus and Hana. Each game will be 15 minutes long. Make one of the courts to have mixed game and the other court could be of any combination.",
+      "expect": {
+        "date": "2026-09-30",
+        "durationMin": 240,
+        "playerCount": 8,
+        "gameLenMin": 15,
+        "playerNames": [
+          "Priya",
+          "Sam",
+          "Ben",
+          "Cleo",
+          "Dev",
+          "Fay",
+          "Gus",
+          "Hana"
+        ],
+        "segments": [
+          {
+            "start": "18:00",
+            "end": "22:00",
+            "mode": "open",
+            "courtModes": [
+              {
+                "court": 1,
+                "mode": "mixed"
+              }
+            ]
+          }
+        ]
+      },
+      "model": {
+        "isEvent": true,
+        "name": "",
+        "date": "2026-09-30",
+        "startTime": "",
+        "endTime": "",
+        "durationMin": 240,
+        "courts": 0,
+        "playerCount": 8,
+        "gameLenMin": 15,
+        "segments": [
+          {
+            "start": "18:00",
+            "end": "22:00",
+            "mode": "open",
+            "courtModes": [
+              {
+                "court": 1,
+                "mode": "mixed"
+              }
+            ]
+          }
+        ],
+        "playerNames": [
+          "Priya",
+          "Sam",
+          "Ben",
+          "Cleo",
+          "Dev",
+          "Fay",
+          "Gus",
+          "Hana"
+        ],
+        "inviteEveryone": false
+      },
+      "result": {
+        "refused": false,
+        "name": "Wednesday Evening",
+        "rows": [
+          [
+            "Date",
+            "Wed, Sep 30"
+          ],
+          [
+            "Time",
+            "6pm – 10pm (240 min)"
+          ],
+          [
+            "Courts",
+            "2 (8 players ÷ 4)"
+          ],
+          [
+            "Game length",
+            "15 min"
+          ],
+          [
+            "Play format",
+            [
+              "6pm–10pm: court 1 mixed, court 2 any combination"
+            ]
+          ],
+          [
+            "Players",
+            "Priya Shah, Sam Lee, Ben Ortiz, Cleo Park, Dev Rao, Fay Adams, Gus Kim, Hana Ito"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "N24",
+      "kind": "create",
+      "category": "Long spoken descriptions",
+      "convention": "C3, C5, C7",
+      "text": "Create a new event for next Thursday. The event will span for a duration of four hours and will consist of eight players. It will have Priya, Sam, Ben, Cleo, Dev, Fay, Gus and Hana. The games will go on for one hour and after one hour there will be a break of ten minutes and this will continue till the end of the event. Every game segment will have two game modes. One court will have a mixed game and the other will have any combination.",
+      "expect": {
+        "date": "2026-10-01",
+        "durationMin": 240,
+        "playerCount": 8,
+        "playerNames": [
+          "Priya",
+          "Sam",
+          "Ben",
+          "Cleo",
+          "Dev",
+          "Fay",
+          "Gus",
+          "Hana"
+        ],
+        "segments": [
+          {
+            "start": "18:00",
+            "end": "19:00",
+            "mode": "open",
+            "courtModes": [
+              {
+                "court": 1,
+                "mode": "mixed"
+              }
+            ]
+          },
+          {
+            "start": "19:00",
+            "end": "19:10",
+            "mode": "break",
+            "courtModes": []
+          },
+          {
+            "start": "19:10",
+            "end": "20:10",
+            "mode": "open",
+            "courtModes": [
+              {
+                "court": 1,
+                "mode": "mixed"
+              }
+            ]
+          },
+          {
+            "start": "20:10",
+            "end": "20:20",
+            "mode": "break",
+            "courtModes": []
+          },
+          {
+            "start": "20:20",
+            "end": "21:20",
+            "mode": "open",
+            "courtModes": [
+              {
+                "court": 1,
+                "mode": "mixed"
+              }
+            ]
+          },
+          {
+            "start": "21:20",
+            "end": "21:30",
+            "mode": "break",
+            "courtModes": []
+          },
+          {
+            "start": "21:30",
+            "end": "22:00",
+            "mode": "open",
+            "courtModes": [
+              {
+                "court": 1,
+                "mode": "mixed"
+              }
+            ]
+          }
+        ]
+      },
+      "model": {
+        "isEvent": true,
+        "name": "",
+        "date": "2026-10-01",
+        "startTime": "",
+        "endTime": "",
+        "durationMin": 240,
+        "courts": 0,
+        "playerCount": 8,
+        "gameLenMin": 0,
+        "segments": [
+          {
+            "start": "18:00",
+            "end": "19:00",
+            "mode": "open",
+            "courtModes": [
+              {
+                "court": 1,
+                "mode": "mixed"
+              }
+            ]
+          },
+          {
+            "start": "19:00",
+            "end": "19:10",
+            "mode": "break",
+            "courtModes": []
+          },
+          {
+            "start": "19:10",
+            "end": "20:10",
+            "mode": "open",
+            "courtModes": [
+              {
+                "court": 1,
+                "mode": "mixed"
+              }
+            ]
+          },
+          {
+            "start": "20:10",
+            "end": "20:20",
+            "mode": "break",
+            "courtModes": []
+          },
+          {
+            "start": "20:20",
+            "end": "21:20",
+            "mode": "open",
+            "courtModes": [
+              {
+                "court": 1,
+                "mode": "mixed"
+              }
+            ]
+          },
+          {
+            "start": "21:20",
+            "end": "21:30",
+            "mode": "break",
+            "courtModes": []
+          },
+          {
+            "start": "21:30",
+            "end": "22:00",
+            "mode": "open",
+            "courtModes": [
+              {
+                "court": 1,
+                "mode": "mixed"
+              }
+            ]
+          }
+        ],
+        "playerNames": [
+          "Priya",
+          "Sam",
+          "Ben",
+          "Cleo",
+          "Dev",
+          "Fay",
+          "Gus",
+          "Hana"
+        ],
+        "inviteEveryone": false
+      },
+      "result": {
+        "refused": false,
+        "name": "Thursday Evening",
+        "rows": [
+          [
+            "Date",
+            "Thu, Oct 1"
+          ],
+          [
+            "Time",
+            "6pm – 10pm (240 min)"
+          ],
+          [
+            "Courts",
+            "2 (8 players ÷ 4)"
+          ],
+          [
+            "Game length",
+            "15 min"
+          ],
+          [
+            "Play format",
+            [
+              "6pm–7pm: court 1 mixed, court 2 any combination",
+              "7pm–7:10pm: break",
+              "7:10pm–8:10pm: court 1 mixed, court 2 any combination",
+              "8:10pm–8:20pm: break",
+              "8:20pm–9:20pm: court 1 mixed, court 2 any combination",
+              "9:20pm–9:30pm: break",
+              "9:30pm–10pm: court 1 mixed, court 2 any combination"
+            ]
+          ],
+          [
+            "Players",
+            "Priya Shah, Sam Lee, Ben Ortiz, Cleo Park, Dev Rao, Fay Adams, Gus Kim, Hana Ito"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "N25",
+      "kind": "create",
+      "category": "Long spoken descriptions",
+      "convention": "C9",
+      "text": "Next Wednesday for four hours with eight players. Make one of the codes mixed and the other code any combination.",
+      "expect": {
+        "date": "2026-09-30",
+        "durationMin": 240,
+        "playerCount": 8,
+        "segments": [
+          {
+            "start": "18:00",
+            "end": "22:00",
+            "mode": "open",
+            "courtModes": [
+              {
+                "court": 1,
+                "mode": "mixed"
+              }
+            ]
+          }
+        ]
+      },
+      "model": {
+        "isEvent": true,
+        "name": "",
+        "date": "2026-09-30",
+        "startTime": "",
+        "endTime": "",
+        "durationMin": 240,
+        "courts": 0,
+        "playerCount": 8,
+        "gameLenMin": 0,
+        "segments": [
+          {
+            "start": "18:00",
+            "end": "22:00",
+            "mode": "open",
+            "courtModes": [
+              {
+                "court": 1,
+                "mode": "mixed"
+              }
+            ]
+          }
+        ],
+        "playerNames": [],
+        "inviteEveryone": false
+      },
+      "result": {
+        "refused": false,
+        "name": "Wednesday Evening",
+        "rows": [
+          [
+            "Date",
+            "Wed, Sep 30"
+          ],
+          [
+            "Time",
+            "6pm – 10pm (240 min)"
+          ],
+          [
+            "Courts",
+            "2 (8 players ÷ 4)"
+          ],
+          [
+            "Game length",
+            "15 min"
+          ],
+          [
+            "Play format",
+            [
+              "6pm–10pm: court 1 mixed, court 2 any combination"
+            ]
+          ],
+          [
+            "Players",
+            "—"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "N26",
+      "kind": "create",
+      "category": "Long spoken descriptions",
+      "text": "Ladder night next Friday from 6:30 to 9:30pm, 5 courts, 12 minute games, everyone invited",
+      "expect": {
+        "name": "Ladder Night",
+        "date": "2026-10-02",
+        "startTime": "18:30",
+        "endTime": "21:30",
+        "courts": 5,
+        "gameLenMin": 12,
+        "inviteEveryone": true
+      },
+      "model": {
+        "isEvent": true,
+        "name": "Ladder Night",
+        "date": "2026-10-02",
+        "startTime": "18:30",
+        "endTime": "21:30",
+        "durationMin": 0,
+        "courts": 5,
+        "playerCount": 0,
+        "gameLenMin": 12,
+        "segments": [],
+        "playerNames": [],
+        "inviteEveryone": true
+      },
+      "result": {
+        "refused": false,
+        "name": "Ladder Night",
+        "rows": [
+          [
+            "Date",
+            "Fri, Oct 2"
+          ],
+          [
+            "Time",
+            "6:30pm – 9:30pm (180 min)"
+          ],
+          [
+            "Courts",
+            "5"
+          ],
+          [
+            "Game length",
+            "12 min"
+          ],
+          [
+            "Play format",
+            [
+              "6:30pm–9:30pm: any combination"
+            ]
+          ],
+          [
+            "Players",
+            "Priya Shah, Sam Lee, Ben Ortiz, Cleo Park, Dev Rao, Fay Adams, Gus Kim, Hana Ito, Ivan Cruz, Jo Moss, Kai Reed, Lena Hart"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "N27",
+      "kind": "create",
+      "category": "Not an event",
+      "text": "What's the weather like tomorrow?",
+      "expect": {
+        "isEvent": false
+      },
+      "model": {
+        "isEvent": false,
+        "name": "",
+        "date": "",
+        "startTime": "",
+        "endTime": "",
+        "durationMin": 0,
+        "courts": 0,
+        "playerCount": 0,
+        "gameLenMin": 0,
+        "segments": [],
+        "playerNames": [],
+        "inviteEveryone": false
+      },
+      "result": {
+        "refused": true,
+        "rows": [
+          [
+            "Result",
+            "Refused — not an event (\"Couldn't find event details in that\")"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "N28",
+      "kind": "create",
+      "category": "Not an event",
+      "text": "Remind me to buy new paddles",
+      "expect": {
+        "isEvent": false
+      },
+      "model": {
+        "isEvent": false,
+        "name": "",
+        "date": "",
+        "startTime": "",
+        "endTime": "",
+        "durationMin": 0,
+        "courts": 0,
+        "playerCount": 0,
+        "gameLenMin": 0,
+        "segments": [],
+        "playerNames": [],
+        "inviteEveryone": false
+      },
+      "result": {
+        "refused": true,
+        "rows": [
+          [
+            "Result",
+            "Refused — not an event (\"Couldn't find event details in that\")"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "N29",
+      "kind": "create",
+      "category": "Not an event",
+      "text": "Great game everyone!",
+      "expect": {
+        "isEvent": false
+      },
+      "model": {
+        "isEvent": false,
+        "name": "",
+        "date": "",
+        "startTime": "",
+        "endTime": "",
+        "durationMin": 0,
+        "courts": 0,
+        "playerCount": 0,
+        "gameLenMin": 0,
+        "segments": [],
+        "playerNames": [],
+        "inviteEveryone": false
+      },
+      "result": {
+        "refused": true,
+        "rows": [
+          [
+            "Result",
+            "Refused — not an event (\"Couldn't find event details in that\")"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "E01",
+      "kind": "edit",
+      "category": "Time & date",
+      "text": "Move it to 7pm",
+      "expect": {
+        "startTime": "19:00"
+      },
+      "model": {
+        "understood": true,
+        "name": "",
+        "date": "",
+        "startTime": "19:00",
+        "endTime": "",
+        "durationMin": 0,
+        "courts": 0,
+        "playerCount": 0,
+        "gameLenMin": 0,
+        "segments": [],
+        "addPlayers": [],
+        "removePlayers": [],
+        "inviteEveryone": false
+      },
+      "result": {
+        "refused": false,
+        "summary": "Start 6pm → 7pm",
+        "rows": [
+          [
+            "Reply",
+            "Start 6pm → 7pm"
+          ],
+          [
+            "Date",
+            "Tue, Sep 29"
+          ],
+          [
+            "Time",
+            "7pm – 10pm (180 min)"
+          ],
+          [
+            "Courts",
+            "2"
+          ],
+          [
+            "Game length",
+            "15 min"
+          ],
+          [
+            "Play format",
+            [
+              "6pm–9pm: any combination"
+            ]
+          ],
+          [
+            "Players",
+            "Priya Shah, Sam Lee, Ben Ortiz, Cleo Park"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "E02",
+      "kind": "edit",
+      "category": "Time & date",
+      "text": "Push it back an hour",
+      "expect": {
+        "startTime": "19:00"
+      },
+      "model": {
+        "understood": true,
+        "name": "",
+        "date": "",
+        "startTime": "19:00",
+        "endTime": "",
+        "durationMin": 0,
+        "courts": 0,
+        "playerCount": 0,
+        "gameLenMin": 0,
+        "segments": [],
+        "addPlayers": [],
+        "removePlayers": [],
+        "inviteEveryone": false
+      },
+      "result": {
+        "refused": false,
+        "summary": "Start 6pm → 7pm",
+        "rows": [
+          [
+            "Reply",
+            "Start 6pm → 7pm"
+          ],
+          [
+            "Date",
+            "Tue, Sep 29"
+          ],
+          [
+            "Time",
+            "7pm – 10pm (180 min)"
+          ],
+          [
+            "Courts",
+            "2"
+          ],
+          [
+            "Game length",
+            "15 min"
+          ],
+          [
+            "Play format",
+            [
+              "6pm–9pm: any combination"
+            ]
+          ],
+          [
+            "Players",
+            "Priya Shah, Sam Lee, Ben Ortiz, Cleo Park"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "E03",
+      "kind": "edit",
+      "category": "Time & date",
+      "text": "End at 10",
+      "expect": {
+        "endTime": "22:00"
+      },
+      "model": {
+        "understood": true,
+        "name": "",
+        "date": "",
+        "startTime": "",
+        "endTime": "22:00",
+        "durationMin": 0,
+        "courts": 0,
+        "playerCount": 0,
+        "gameLenMin": 0,
+        "segments": [],
+        "addPlayers": [],
+        "removePlayers": [],
+        "inviteEveryone": false
+      },
+      "result": {
+        "refused": false,
+        "summary": "Length 180 → 240 min",
+        "rows": [
+          [
+            "Reply",
+            "Length 180 → 240 min"
+          ],
+          [
+            "Date",
+            "Tue, Sep 29"
+          ],
+          [
+            "Time",
+            "6pm – 10pm (240 min)"
+          ],
+          [
+            "Courts",
+            "2"
+          ],
+          [
+            "Game length",
+            "15 min"
+          ],
+          [
+            "Play format",
+            [
+              "6pm–9pm: any combination"
+            ]
+          ],
+          [
+            "Players",
+            "Priya Shah, Sam Lee, Ben Ortiz, Cleo Park"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "E04",
+      "kind": "edit",
+      "category": "Time & date",
+      "text": "Move it to Thursday",
+      "expect": {
+        "date": "2026-10-01"
+      },
+      "model": {
+        "understood": true,
+        "name": "",
+        "date": "2026-10-01",
+        "startTime": "",
+        "endTime": "",
+        "durationMin": 0,
+        "courts": 0,
+        "playerCount": 0,
+        "gameLenMin": 0,
+        "segments": [],
+        "addPlayers": [],
+        "removePlayers": [],
+        "inviteEveryone": false
+      },
+      "result": {
+        "refused": false,
+        "summary": "Date Tue, Sep 29 → Thu, Oct 1",
+        "rows": [
+          [
+            "Reply",
+            "Date Tue, Sep 29 → Thu, Oct 1"
+          ],
+          [
+            "Date",
+            "Thu, Oct 1"
+          ],
+          [
+            "Time",
+            "6pm – 9pm (180 min)"
+          ],
+          [
+            "Courts",
+            "2"
+          ],
+          [
+            "Game length",
+            "15 min"
+          ],
+          [
+            "Play format",
+            [
+              "6pm–9pm: any combination"
+            ]
+          ],
+          [
+            "Players",
+            "Priya Shah, Sam Lee, Ben Ortiz, Cleo Park"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "E05",
+      "kind": "edit",
+      "category": "Courts & games",
+      "text": "Add a court",
+      "expect": {
+        "courts": 3
+      },
+      "model": {
+        "understood": true,
+        "name": "",
+        "date": "",
+        "startTime": "",
+        "endTime": "",
+        "durationMin": 0,
+        "courts": 3,
+        "playerCount": 0,
+        "gameLenMin": 0,
+        "segments": [],
+        "addPlayers": [],
+        "removePlayers": [],
+        "inviteEveryone": false
+      },
+      "result": {
+        "refused": false,
+        "summary": "Courts 2 → 3",
+        "rows": [
+          [
+            "Reply",
+            "Courts 2 → 3"
+          ],
+          [
+            "Date",
+            "Tue, Sep 29"
+          ],
+          [
+            "Time",
+            "6pm – 9pm (180 min)"
+          ],
+          [
+            "Courts",
+            "3"
+          ],
+          [
+            "Game length",
+            "15 min"
+          ],
+          [
+            "Play format",
+            [
+              "6pm–9pm: any combination"
+            ]
+          ],
+          [
+            "Players",
+            "Priya Shah, Sam Lee, Ben Ortiz, Cleo Park"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "E06",
+      "kind": "edit",
+      "category": "Courts & games",
+      "text": "Can you update the game length to be 20mins each?",
+      "expect": {
+        "gameLenMin": 20
+      },
+      "model": {
+        "understood": true,
+        "name": "",
+        "date": "",
+        "startTime": "",
+        "endTime": "",
+        "durationMin": 0,
+        "courts": 0,
+        "playerCount": 0,
+        "gameLenMin": 20,
+        "segments": [],
+        "addPlayers": [],
+        "removePlayers": [],
+        "inviteEveryone": false
+      },
+      "result": {
+        "refused": false,
+        "summary": "Games 15 → 20 min",
+        "rows": [
+          [
+            "Reply",
+            "Games 15 → 20 min"
+          ],
+          [
+            "Date",
+            "Tue, Sep 29"
+          ],
+          [
+            "Time",
+            "6pm – 9pm (180 min)"
+          ],
+          [
+            "Courts",
+            "2"
+          ],
+          [
+            "Game length",
+            "20 min"
+          ],
+          [
+            "Play format",
+            [
+              "6pm–9pm: any combination"
+            ]
+          ],
+          [
+            "Players",
+            "Priya Shah, Sam Lee, Ben Ortiz, Cleo Park"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "E07",
+      "kind": "edit",
+      "category": "Play format",
+      "text": "Make court 1 mixed doubles for the whole evening",
+      "convention": "C10",
+      "expect": {
+        "segments": [
+          {
+            "start": "18:00",
+            "end": "21:00",
+            "mode": "open",
+            "courtModes": [
+              {
+                "court": 1,
+                "mode": "mixed"
+              }
+            ]
+          }
+        ]
+      },
+      "model": {
+        "understood": true,
+        "name": "",
+        "date": "",
+        "startTime": "",
+        "endTime": "",
+        "durationMin": 0,
+        "courts": 0,
+        "playerCount": 0,
+        "gameLenMin": 0,
+        "segments": [
+          {
+            "start": "18:00",
+            "end": "21:00",
+            "mode": "open",
+            "courtModes": [
+              {
+                "court": 1,
+                "mode": "mixed"
+              }
+            ]
+          }
+        ],
+        "addPlayers": [],
+        "removePlayers": [],
+        "inviteEveryone": false
+      },
+      "result": {
+        "refused": false,
+        "summary": "Play format: 6pm–9pm court 1 mixed, court 2 any combination",
+        "rows": [
+          [
+            "Reply",
+            "Play format: 6pm–9pm court 1 mixed, court 2 any combination"
+          ],
+          [
+            "Date",
+            "Tue, Sep 29"
+          ],
+          [
+            "Time",
+            "6pm – 9pm (180 min)"
+          ],
+          [
+            "Courts",
+            "2"
+          ],
+          [
+            "Game length",
+            "15 min"
+          ],
+          [
+            "Play format",
+            [
+              "6pm–9pm: court 1 mixed, court 2 any combination"
+            ]
+          ],
+          [
+            "Players",
+            "Priya Shah, Sam Lee, Ben Ortiz, Cleo Park"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "E08",
+      "kind": "edit",
+      "category": "Play format",
+      "text": "Mixed for the last hour",
+      "convention": "C10",
+      "expect": {
+        "segments": [
+          {
+            "start": "18:00",
+            "end": "20:00",
+            "mode": "open",
+            "courtModes": []
+          },
+          {
+            "start": "20:00",
+            "end": "21:00",
+            "mode": "mixed",
+            "courtModes": []
+          }
+        ]
+      },
+      "model": {
+        "understood": true,
+        "name": "",
+        "date": "",
+        "startTime": "",
+        "endTime": "",
+        "durationMin": 0,
+        "courts": 0,
+        "playerCount": 0,
+        "gameLenMin": 0,
+        "segments": [
+          {
+            "start": "18:00",
+            "end": "20:00",
+            "mode": "open",
+            "courtModes": []
+          },
+          {
+            "start": "20:00",
+            "end": "21:00",
+            "mode": "mixed",
+            "courtModes": []
+          }
+        ],
+        "addPlayers": [],
+        "removePlayers": [],
+        "inviteEveryone": false
+      },
+      "result": {
+        "refused": false,
+        "summary": "Play format: 6pm–8pm any combination; 8pm–9pm mixed",
+        "rows": [
+          [
+            "Reply",
+            "Play format: 6pm–8pm any combination; 8pm–9pm mixed"
+          ],
+          [
+            "Date",
+            "Tue, Sep 29"
+          ],
+          [
+            "Time",
+            "6pm – 9pm (180 min)"
+          ],
+          [
+            "Courts",
+            "2"
+          ],
+          [
+            "Game length",
+            "15 min"
+          ],
+          [
+            "Play format",
+            [
+              "6pm–8pm: any combination",
+              "8pm–9pm: mixed"
+            ]
+          ],
+          [
+            "Players",
+            "Priya Shah, Sam Lee, Ben Ortiz, Cleo Park"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "E09",
+      "kind": "edit",
+      "category": "Breaks",
+      "text": "Add a 10 minute break at 7:30",
+      "convention": "C10",
+      "expect": {
+        "segments": [
+          {
+            "start": "18:00",
+            "end": "19:30",
+            "mode": "open",
+            "courtModes": []
+          },
+          {
+            "start": "19:30",
+            "end": "19:40",
+            "mode": "break",
+            "courtModes": []
+          },
+          {
+            "start": "19:40",
+            "end": "21:00",
+            "mode": "open",
+            "courtModes": []
+          }
+        ]
+      },
+      "model": {
+        "understood": true,
+        "name": "",
+        "date": "",
+        "startTime": "",
+        "endTime": "",
+        "durationMin": 0,
+        "courts": 0,
+        "playerCount": 0,
+        "gameLenMin": 0,
+        "segments": [
+          {
+            "start": "18:00",
+            "end": "19:30",
+            "mode": "open",
+            "courtModes": []
+          },
+          {
+            "start": "19:30",
+            "end": "19:40",
+            "mode": "break",
+            "courtModes": []
+          },
+          {
+            "start": "19:40",
+            "end": "21:00",
+            "mode": "open",
+            "courtModes": []
+          }
+        ],
+        "addPlayers": [],
+        "removePlayers": [],
+        "inviteEveryone": false
+      },
+      "result": {
+        "refused": false,
+        "summary": "Play format: 6pm–7:30pm any combination; 7:30pm–7:40pm break; 7:40pm–9pm any combination",
+        "rows": [
+          [
+            "Reply",
+            "Play format: 6pm–7:30pm any combination; 7:30pm–7:40pm break; 7:40pm–9pm any combination"
+          ],
+          [
+            "Date",
+            "Tue, Sep 29"
+          ],
+          [
+            "Time",
+            "6pm – 9pm (180 min)"
+          ],
+          [
+            "Courts",
+            "2"
+          ],
+          [
+            "Game length",
+            "15 min"
+          ],
+          [
+            "Play format",
+            [
+              "6pm–7:30pm: any combination",
+              "7:30pm–7:40pm: break",
+              "7:40pm–9pm: any combination"
+            ]
+          ],
+          [
+            "Players",
+            "Priya Shah, Sam Lee, Ben Ortiz, Cleo Park"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "E10",
+      "kind": "edit",
+      "category": "Breaks",
+      "text": "A 10 minute break after every hour of play",
+      "convention": "C7",
+      "expect": {
+        "segments": [
+          {
+            "start": "18:00",
+            "end": "19:00",
+            "mode": "open",
+            "courtModes": []
+          },
+          {
+            "start": "19:00",
+            "end": "19:10",
+            "mode": "break",
+            "courtModes": []
+          },
+          {
+            "start": "19:10",
+            "end": "20:10",
+            "mode": "open",
+            "courtModes": []
+          },
+          {
+            "start": "20:10",
+            "end": "20:20",
+            "mode": "break",
+            "courtModes": []
+          },
+          {
+            "start": "20:20",
+            "end": "21:00",
+            "mode": "open",
+            "courtModes": []
+          }
+        ]
+      },
+      "model": {
+        "understood": true,
+        "name": "",
+        "date": "",
+        "startTime": "",
+        "endTime": "",
+        "durationMin": 0,
+        "courts": 0,
+        "playerCount": 0,
+        "gameLenMin": 0,
+        "segments": [
+          {
+            "start": "18:00",
+            "end": "19:00",
+            "mode": "open",
+            "courtModes": []
+          },
+          {
+            "start": "19:00",
+            "end": "19:10",
+            "mode": "break",
+            "courtModes": []
+          },
+          {
+            "start": "19:10",
+            "end": "20:10",
+            "mode": "open",
+            "courtModes": []
+          },
+          {
+            "start": "20:10",
+            "end": "20:20",
+            "mode": "break",
+            "courtModes": []
+          },
+          {
+            "start": "20:20",
+            "end": "21:00",
+            "mode": "open",
+            "courtModes": []
+          }
+        ],
+        "addPlayers": [],
+        "removePlayers": [],
+        "inviteEveryone": false
+      },
+      "result": {
+        "refused": false,
+        "summary": "Play format: 6pm–7pm any combination; 7pm–7:10pm break; 7:10pm–8:10pm any combination; 8:10pm–8:20pm break; 8:20pm–9pm any combination",
+        "rows": [
+          [
+            "Reply",
+            "Play format: 6pm–7pm any combination; 7pm–7:10pm break; 7:10pm–8:10pm any combination; 8:10pm–8:20pm break; 8:20pm–9pm any combination"
+          ],
+          [
+            "Date",
+            "Tue, Sep 29"
+          ],
+          [
+            "Time",
+            "6pm – 9pm (180 min)"
+          ],
+          [
+            "Courts",
+            "2"
+          ],
+          [
+            "Game length",
+            "15 min"
+          ],
+          [
+            "Play format",
+            [
+              "6pm–7pm: any combination",
+              "7pm–7:10pm: break",
+              "7:10pm–8:10pm: any combination",
+              "8:10pm–8:20pm: break",
+              "8:20pm–9pm: any combination"
+            ]
+          ],
+          [
+            "Players",
+            "Priya Shah, Sam Lee, Ben Ortiz, Cleo Park"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "E11",
+      "kind": "edit",
+      "category": "Players",
+      "text": "Add Dev and Fay, remove Sam",
+      "expect": {
+        "addPlayers": [
+          "Dev",
+          "Fay"
+        ],
+        "removePlayers": [
+          "Sam"
+        ]
+      },
+      "model": {
+        "understood": true,
+        "name": "",
+        "date": "",
+        "startTime": "",
+        "endTime": "",
+        "durationMin": 0,
+        "courts": 0,
+        "playerCount": 0,
+        "gameLenMin": 0,
+        "segments": [],
+        "addPlayers": [
+          "Dev",
+          "Fay"
+        ],
+        "removePlayers": [
+          "Sam"
+        ],
+        "inviteEveryone": false
+      },
+      "result": {
+        "refused": false,
+        "summary": "Added Dev Rao, Fay Adams · Removed Sam Lee",
+        "rows": [
+          [
+            "Reply",
+            "Added Dev Rao, Fay Adams · Removed Sam Lee"
+          ],
+          [
+            "Date",
+            "Tue, Sep 29"
+          ],
+          [
+            "Time",
+            "6pm – 9pm (180 min)"
+          ],
+          [
+            "Courts",
+            "2"
+          ],
+          [
+            "Game length",
+            "15 min"
+          ],
+          [
+            "Play format",
+            [
+              "6pm–9pm: any combination"
+            ]
+          ],
+          [
+            "Players",
+            "Priya Shah, Ben Ortiz, Cleo Park, Dev Rao, Fay Adams"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "E12",
+      "kind": "edit",
+      "category": "Name",
+      "text": "Rename it to Ladder Night",
+      "expect": {
+        "name": "Ladder Night"
+      },
+      "model": {
+        "understood": true,
+        "name": "Ladder Night",
+        "date": "",
+        "startTime": "",
+        "endTime": "",
+        "durationMin": 0,
+        "courts": 0,
+        "playerCount": 0,
+        "gameLenMin": 0,
+        "segments": [],
+        "addPlayers": [],
+        "removePlayers": [],
+        "inviteEveryone": false
+      },
+      "result": {
+        "refused": false,
+        "summary": "Renamed to \"Ladder Night\"",
+        "rows": [
+          [
+            "Reply",
+            "Renamed to \"Ladder Night\""
+          ],
+          [
+            "Date",
+            "Tue, Sep 29"
+          ],
+          [
+            "Time",
+            "6pm – 9pm (180 min)"
+          ],
+          [
+            "Courts",
+            "2"
+          ],
+          [
+            "Game length",
+            "15 min"
+          ],
+          [
+            "Play format",
+            [
+              "6pm–9pm: any combination"
+            ]
+          ],
+          [
+            "Players",
+            "Priya Shah, Sam Lee, Ben Ortiz, Cleo Park"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "E13",
+      "kind": "edit",
+      "category": "Play format",
+      "text": "Also make court 2 men's for the first hour",
+      "convention": "C10",
+      "context": {
+        "name": "Tuesday Night",
+        "date": "2026-09-29",
+        "startTime": "18:00",
+        "durationMin": 180,
+        "courts": 2,
+        "gameLenMin": 15,
+        "segments": [
+          {
+            "start": "18:00",
+            "end": "21:00",
+            "modes": {
+              "1": "mixed"
+            }
+          }
+        ],
+        "memberIds": [
+          "p1",
+          "p2",
+          "p3",
+          "p4"
+        ]
+      },
+      "expect": {
+        "segments": [
+          {
+            "start": "18:00",
+            "end": "19:00",
+            "mode": "open",
+            "courtModes": [
+              {
+                "court": 1,
+                "mode": "mixed"
+              },
+              {
+                "court": 2,
+                "mode": "men"
+              }
+            ]
+          },
+          {
+            "start": "19:00",
+            "end": "21:00",
+            "mode": "open",
+            "courtModes": [
+              {
+                "court": 1,
+                "mode": "mixed"
+              }
+            ]
+          }
+        ]
+      },
+      "model": {
+        "understood": true,
+        "name": "",
+        "date": "",
+        "startTime": "",
+        "endTime": "",
+        "durationMin": 0,
+        "courts": 0,
+        "playerCount": 0,
+        "gameLenMin": 0,
+        "segments": [
+          {
+            "start": "18:00",
+            "end": "19:00",
+            "mode": "open",
+            "courtModes": [
+              {
+                "court": 1,
+                "mode": "mixed"
+              },
+              {
+                "court": 2,
+                "mode": "men"
+              }
+            ]
+          },
+          {
+            "start": "19:00",
+            "end": "21:00",
+            "mode": "open",
+            "courtModes": [
+              {
+                "court": 1,
+                "mode": "mixed"
+              }
+            ]
+          }
+        ],
+        "addPlayers": [],
+        "removePlayers": [],
+        "inviteEveryone": false
+      },
+      "result": {
+        "refused": false,
+        "summary": "Play format: 6pm–7pm court 1 mixed, court 2 men's; 7pm–9pm court 1 mixed, court 2 any combination",
+        "rows": [
+          [
+            "Reply",
+            "Play format: 6pm–7pm court 1 mixed, court 2 men's; 7pm–9pm court 1 mixed, court 2 any combination"
+          ],
+          [
+            "Date",
+            "Tue, Sep 29"
+          ],
+          [
+            "Time",
+            "6pm – 9pm (180 min)"
+          ],
+          [
+            "Courts",
+            "2"
+          ],
+          [
+            "Game length",
+            "15 min"
+          ],
+          [
+            "Play format",
+            [
+              "6pm–7pm: court 1 mixed, court 2 men's",
+              "7pm–9pm: court 1 mixed, court 2 any combination"
+            ]
+          ],
+          [
+            "Players",
+            "Priya Shah, Sam Lee, Ben Ortiz, Cleo Park"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "E14",
+      "kind": "edit",
+      "category": "Not a change",
+      "text": "Thanks, looks good!",
+      "expect": {
+        "understood": false
+      },
+      "model": {
+        "understood": false,
+        "name": "",
+        "date": "",
+        "startTime": "",
+        "endTime": "",
+        "durationMin": 0,
+        "courts": 0,
+        "playerCount": 0,
+        "gameLenMin": 0,
+        "segments": [],
+        "addPlayers": [],
+        "removePlayers": [],
+        "inviteEveryone": false
+      },
+      "result": {
+        "refused": true,
+        "rows": [
+          [
+            "Result",
+            "Refused — not a change to this event"
+          ]
+        ]
+      }
+    }
+  ]
+}
