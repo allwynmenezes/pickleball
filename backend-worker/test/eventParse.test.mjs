@@ -1,7 +1,7 @@
 /* Unit tests for src/eventParse.js — the code-only half of "describe your
    event". No server, no AI calls: run with `npm run test:parse`. */
 import assert from 'node:assert/strict';
-import { extractFromText, buildSegments, buildTimedSegments, matchPlayers, buildDraft, buildEdit } from '../src/eventParse.js';
+import { extractFromText, buildSegments, buildTimedSegments, matchPlayers, buildDraft, buildEdit, fixCommonMishearings, describeModes } from '../src/eventParse.js';
 
 let failures = 0;
 const check = (name, fn) => {
@@ -107,6 +107,17 @@ console.log('buildTimedSegments');
   ));
   check('nothing usable → null', () => assert.equal(buildTimedSegments([{ start: 'soon', end: '', mode: 'mixed' }], ev4), null));
 }
+
+console.log('speech and replies');
+check('"codes"/"cords" heard for courts are corrected; other words untouched', () => {
+  assert.equal(fixCommonMishearings('Make one of the codes mixed and the other code any combination'), 'Make one of the courts mixed and the other court any combination');
+  assert.equal(fixCommonMishearings('Cords 3 and 4, decode the barcode'), 'Courts 3 and 4, decode the barcode');
+});
+check('replies describe per-court modes', () => {
+  assert.equal(describeModes({ 1: 'mixed' }, 2), 'court 1 mixed, court 2 any combination');
+  assert.equal(describeModes({ 1: 'mixed', 2: 'mixed' }, 2), 'mixed');
+  assert.equal(describeModes({}, 3), 'any combination');
+});
 
 console.log('matchPlayers');
 const players = [{ id: 'a', name: 'Priya Shah' }, { id: 'b', name: 'Sam Lee' }, { id: 'c', name: 'Samantha Cruz' }, { id: 'd', name: 'Ben' }, { id: 'e', name: 'Ben Ortiz' }];

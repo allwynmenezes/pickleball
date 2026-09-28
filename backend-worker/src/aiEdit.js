@@ -11,7 +11,7 @@
    summary written by code go back — never the model's own text. */
 import { json, err, readJson } from './util.js';
 import { requesterId } from './state.js';
-import { buildEdit } from './eventParse.js';
+import { buildEdit, fixCommonMishearings } from './eventParse.js';
 import { DEFAULT_MODEL, MAX_TEXT, SCHEMA, checkLimits, clientClock } from './ai.js';
 
 const EDIT_SCHEMA = {
@@ -101,7 +101,7 @@ export async function editEvent(request, env) {
   if (!playerId) return err(401, 'Sign in to change this event.');
 
   const body = await readJson(request);
-  const text = typeof body.text === 'string' ? body.text.trim() : '';
+  const text = typeof body.text === 'string' ? fixCommonMishearings(body.text.trim()) : '';
   if (text.length < 2) return err(400, 'Say what to change first.');
   if (text.length > MAX_TEXT) return err(400, `Keep it under ${MAX_TEXT} characters.`);
   const current = sanitizeEvent(body.event);

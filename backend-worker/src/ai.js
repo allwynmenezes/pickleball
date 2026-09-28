@@ -19,7 +19,7 @@
    code-based parsing found (dates, times, "4 courts"). */
 import { json, err, readJson } from './util.js';
 import { requesterId } from './state.js';
-import { buildDraft, MODES } from './eventParse.js';
+import { buildDraft, MODES, fixCommonMishearings } from './eventParse.js';
 
 // Llama 3.3 70B supports Workers AI's JSON mode and is accurate enough for
 // loose phrasing. About 60 neurons a request → ~160 a day on the free plan.
@@ -143,7 +143,7 @@ export async function parseEvent(request, env) {
   if (!playerId) return err(401, 'Sign in to describe an event.');
 
   const body = await readJson(request);
-  const text = typeof body.text === 'string' ? body.text.trim() : '';
+  const text = typeof body.text === 'string' ? fixCommonMishearings(body.text.trim()) : '';
   if (text.length < 3) return err(400, 'Describe the event in a few words first.');
   if (text.length > MAX_TEXT) return err(400, `Keep the description under ${MAX_TEXT} characters.`);
   const { today, weekday, nowLocalIso, tzOffsetMin } = clientClock(body, env);
@@ -192,8 +192,12 @@ export async function transcribe(request, env) {
   if (limited) return err(429, limited);
 
   try {
-    const out = await env.AI.run(TRANSCRIBE_MODEL, { audio: toBase64(await file.arrayBuffer()), language: 'en', vad_filter: true });
-    const text = String((out && out.text) || '').replace(/\s+/g, ' ').trim().slice(0, MAX_TEXT);
+    const out = await env.AI.run(TRANSCRIBE_MODEL, {
+      audio: toBase64(await file.arrayBuffer()), language: 'en', vad_filter: true,
+      // Primes Whisper with the words people use here ("courts", not "codes").
+      initial_prompt: "Pickleball session. Courts, mixed doubles, men's doubles, women's doubles, open play, any combination, break, game length, players.",
+    });
+    const text = fixCommonMishearings(String((out && out.text) || '').replace(/\s+/g, ' ').trim()).slice(0, MAX_TEXT);
     if (!text) return err(422, "Couldn't hear anything in that. Try again a little closer to the phone.");
     return json({ text });
   } catch (e) {

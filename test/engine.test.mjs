@@ -2,7 +2,7 @@
    fair sitting out, court types, warm-up repeat, partial RSVPs, kept rounds,
    and speed. Run with `npm test` from the project root. */
 import assert from 'node:assert/strict';
-import { generateRoster, pairKey, isPastEvent, splitEventsByTime, localDateStr, eventStatus } from '../lib/engine.js';
+import { generateRoster, pairKey, isPastEvent, splitEventsByTime, localDateStr, eventStatus, segmentsWithBreak } from '../lib/engine.js';
 
 let failures = 0;
 const check = (name, fn) => {
@@ -176,6 +176,37 @@ console.log('past and upcoming events');
     ], now);
     assert.deepEqual(upcoming.map(e => e.id), ['tonight', 'soon', 'later']);
     assert.deepEqual(past.map(e => e.id), ['thismorning', 'yesterday', 'old']);
+  });
+}
+
+console.log('adding a break');
+{
+  const base = { startTime: '18:00', durationMin: 180, courts: 2, gameLenMin: 15 };
+  const show = segs => segs.map(s => `${s.start}-${s.end} ${JSON.stringify(s.modes)}`);
+  const B = '{"1":"break","2":"break"}';
+  check('a break inside one segment splits it; both sides keep its modes', () => assert.deepEqual(
+    show(segmentsWithBreak({ ...base, segments: [{ start: '18:00', end: '21:00', modes: { 1: 'mixed' } }] }, 60, 15)),
+    ['18:00-19:00 {"1":"mixed"}', `19:00-19:15 ${B}`, '19:15-21:00 {"1":"mixed"}'],
+  ));
+  check('a break across two segments trims both', () => assert.deepEqual(
+    show(segmentsWithBreak({ ...base, segments: [{ start: '18:00', end: '19:30', modes: { 1: 'men' } }, { start: '19:30', end: '21:00', modes: { 1: 'women' } }] }, 75, 30)),
+    ['18:00-19:15 {"1":"men"}', `19:15-19:45 ${B}`, '19:45-21:00 {"1":"women"}'],
+  ));
+  check('a sliver shorter than a game is folded into its neighbour', () => assert.deepEqual(
+    show(segmentsWithBreak({ ...base, segments: [{ start: '18:00', end: '19:00', modes: {} }, { start: '19:00', end: '21:00', modes: { 1: 'mixed' } }] }, 65, 10)),
+    ['18:00-19:05 {}', `19:05-19:15 ${B}`, '19:15-21:00 {"1":"mixed"}'],
+  ));
+  check('a break running to the end of the event', () => assert.deepEqual(
+    show(segmentsWithBreak({ ...base, segments: [] }, 150, 60)),
+    ['18:00-20:30 {}', `20:30-21:00 ${B}`],
+  ));
+  check('a segment\'s own game length is kept on both sides', () => {
+    const segs = segmentsWithBreak({ ...base, segments: [{ start: '18:00', end: '21:00', modes: {}, gameLenMin: 20 }] }, 60, 10);
+    assert.deepEqual(segs.map(s => s.gameLenMin), [20, undefined, 20]);
+  });
+  check('too short or out of range → null', () => {
+    assert.equal(segmentsWithBreak({ ...base, segments: [] }, 60, 0), null);
+    assert.equal(segmentsWithBreak({ ...base, segments: [] }, 180, 10), null);
   });
 }
 

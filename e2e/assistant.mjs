@@ -119,9 +119,29 @@ await step('a break segment is highlighted in mint', async () => {
   const bg = await tag.evaluate(el => { let n = el; for (let i = 0; i < 6 && n; i++, n = n.parentElement) { const c = getComputedStyle(n).backgroundColor; if (c === 'rgb(231, 253, 247)') return c; } return null; });
   assert.equal(bg, 'rgb(231, 253, 247)', 'break segment sits on the mint tint');
   await page.getByText('No games on any court.').waitFor();
-  await page.screenshot({ path: `${SHOTS}/a0-break.png`, fullPage: true });
-  // Nothing changed here: Save just closes (Cancel would ask to discard).
+});
+await step('Add break: start and length default sensibly; the end time is shown; the break is carved in', async () => {
+  // Leave League Night (nothing changed) and open the plain draft.
   await page.getByText('Save', { exact: true }).last().click();
+  await page.waitForTimeout(1000);
+  await page.getByText('Draft Session').click();
+  await page.getByText('Edit', { exact: true }).click();
+  await page.getByText('Add game segment').waitFor({ timeout: 5000 });
+  await page.getByText('Add break', { exact: true }).first().click();
+  await page.getByText('Add a break').waitFor();
+  await page.getByText(/Break from 7pm to/).waitFor();
+  assert.ok(await page.getByText('7:15pm', { exact: true }).count(), 'end time shown');
+  await page.screenshot({ path: `${SHOTS}/a0-add-break.png`, fullPage: true });
+  await page.getByText('Add break', { exact: true }).last().click();
+  await page.waitForTimeout(300);
+  await page.getByText('Save', { exact: true }).last().click();
+  await page.waitForTimeout(800);
+  const ev = lastPutEvent('draft1');
+  assert.deepEqual(ev.segments.map(x => `${x.start}-${x.end} ${JSON.stringify(x.modes)}`), [
+    '18:00-19:00 {}',
+    '19:00-19:15 {"1":"break","2":"break","3":"break"}',
+    '19:15-21:00 {}',
+  ]);
   await page.waitForTimeout(1000);
 });
 

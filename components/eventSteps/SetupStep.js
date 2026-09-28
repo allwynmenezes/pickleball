@@ -5,7 +5,7 @@ import { SectionTitle, Card, Field, TextField, DateField, Hint, Btn, Row, Gender
 import { TimeWheelField, WheelSelectField } from '../WheelPicker';
 import { showAlert, showConfirm } from '../../lib/confirm';
 import {
-  updateEventField, normalizeSegments, addSegment, removeSegment, updateSegment, updateSegmentMode, updateSegmentGameLen,
+  updateEventField, normalizeSegments, addSegment, addBreak, removeSegment, updateSegment, updateSegmentMode, updateSegmentGameLen,
   addPlayerToEvent, addAllPlayersToEvent, addNewPlayerToEvent, removeEventPlayer, useStore, getPlayerById, editPlayer,
   courtLabelForRange, checkpointEventFlow, playerName,
 } from '../../lib/store';
@@ -71,6 +71,7 @@ function SegmentGameLenField({ ev, idx, seg }) {
 
 export default function SetupStep({ ev, onDeleteEvent, canEdit, active }) {
   const [editing, setEditing] = React.useState(false);
+  const [addingBreak, setAddingBreak] = React.useState(false);
   const [saveOnClose, setSaveOnClose] = React.useState(false);
   // Leaving the Setup page always ends editing.
   React.useEffect(() => { if (!active) setEditing(false); }, [active]);
@@ -153,7 +154,11 @@ export default function SetupStep({ ev, onDeleteEvent, canEdit, active }) {
           );
         })}
         <View style={styles.segDivider} />
-        <Btn title="Add segment" variant="outline" small onPress={() => { const r = addSegment(ev); if (r.error) showAlert(r.error); }} style={{ alignSelf: 'flex-end' }} />
+        <View style={styles.addRow}>
+          <Btn title="Add game segment" icon="add" variant="outline" small onPress={() => { const r = addSegment(ev); if (r.error) showAlert(r.error); }} />
+          <Btn title="Add break" icon="cafe-outline" variant="outline" small onPress={() => setAddingBreak(true)} />
+        </View>
+        {addingBreak ? <AddBreakForm ev={ev} onDone={() => setAddingBreak(false)} /> : null}
         <Hint>If a Mixed or single-gender court can't be filled with the players actually available, that court falls back to "any combination" for the affected time and gets flagged in the roster.</Hint>
       </Card>
 
@@ -238,6 +243,49 @@ function SetupSummary({ ev, canEdit, onEdit, onDelete }) {
       {canEdit && !ev.published ? (
         <Btn title="Delete draft" icon="trash" variant="ghost" small dangerText onPress={onDelete} style={{ alignSelf: 'flex-end', marginTop: 14 }} />
       ) : null}
+    </View>
+  );
+}
+
+/* "Add break": when it starts (5-minute steps within the event) and how
+   long it lasts (5-minute steps up to the time left from that start); the
+   end time is worked out and shown. See addBreak in lib/store.js. */
+function AddBreakForm({ ev, onDone }) {
+  const starts = [];
+  for (let off = 5; off <= ev.durationMin - 5; off += 5) starts.push(off);
+  // Default: on the first hour mark, else a third of the way in.
+  const [start, setStart] = React.useState(starts.includes(60) ? 60 : starts[Math.floor(starts.length / 3)] || 0);
+  const maxLen = ev.durationMin - start;
+  const lengths = [];
+  for (let m = 5; m <= maxLen; m += 5) lengths.push(m);
+  const [len, setLen] = React.useState(Math.min(15, maxLen));
+  const length = Math.min(len, maxLen);
+  const endClock = offsetToClock(ev, start + length);
+  const fmtLen = m => (m >= 60 ? `${Math.floor(m / 60)} hr${m % 60 ? ` ${m % 60} min` : ''}` : `${m} min`);
+
+  return (
+    <View style={[styles.breakSeg, { marginTop: 12, gap: 10 }]}>
+      <BreakTag />
+      <Text style={styles.addBreakTitle}>Add a break</Text>
+      <View style={styles.grid2}>
+        <WheelSelectField
+          label="Starts at" value={start}
+          onValueChange={(v) => setStart(Number(v))}
+          items={starts.map(off => ({ label: fmtClock(offsetToClock(ev, off)), value: off }))}
+        />
+        <WheelSelectField
+          label="Lasts" value={length}
+          onValueChange={(v) => setLen(Number(v))}
+          items={lengths.map(m => ({ label: fmtLen(m), value: m }))}
+        />
+      </View>
+      <Text style={styles.breakNote}>
+        Break from {fmtClock(offsetToClock(ev, start))} to <Text style={{ fontWeight: '700' }}>{fmtClock(endClock)}</Text> — no games on any court.
+      </Text>
+      <View style={styles.addRow}>
+        <Btn title="Cancel" variant="ghost" small onPress={onDone} />
+        <Btn title="Add break" small onPress={() => { const r = addBreak(ev, start, length); if (r.error) showAlert(r.error); else onDone(); }} />
+      </View>
     </View>
   );
 }
@@ -353,6 +401,8 @@ const styles = StyleSheet.create({
   infoLabel: { fontSize: 12.5, color: colors.slate, fontWeight: '600' },
   infoValue: { fontSize: 13.5, color: colors.ink, flexShrink: 1, textAlign: 'right' },
   summarySeg: { borderLeftWidth: 3, borderLeftColor: colors.court, paddingLeft: 12, gap: 3 },
+  addRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, flexWrap: 'wrap' },
+  addBreakTitle: { fontSize: 15, fontWeight: '700', color: colors.ink },
   breakSeg: { backgroundColor: colors.ballTint, borderRadius: radius.sm, padding: 10, borderLeftWidth: 3, borderLeftColor: colors.ball },
   breakSummary: { backgroundColor: colors.ballTint, borderLeftColor: colors.ball, borderRadius: radius.sm, paddingVertical: 10, paddingRight: 10 },
   breakHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },

@@ -38,6 +38,14 @@ function num(s) {
 /* now: the user's current time (ISO); tzOffsetMin: minutes east of UTC,
    i.e. -Date#getTimezoneOffset() on the phone. Dates are read in the
    user's timezone, never the server's. */
+/* Speech-to-text hears "courts" as "codes" or "cords" ("make one of the
+   codes mixed"). In this app those words only ever mean courts. */
+export function fixCommonMishearings(text) {
+  return String(text)
+    .replace(/\b(codes|cords|quarts)\b/gi, m => (m[0] === m[0].toUpperCase() ? 'Courts' : 'courts'))
+    .replace(/\b(code|cord|quart)\b/gi, m => (m[0] === m[0].toUpperCase() ? 'Court' : 'court'));
+}
+
 export function extractFromText(text, opts) {
   return readText(text, opts).out;
 }
@@ -448,6 +456,14 @@ const MODE_WORDS = { open: 'any combination', men: "men's", women: "women's", mi
 
 const MENTIONS_DATE = /\b(mon|tue|wed|thu|fri|sat|sun)[a-z]*\b|\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b|\b(today|tonight|tomorrow|tmrw|yesterday|week|weekend|date|day|christmas|eve|holiday)\b|\d{1,2}(st|nd|rd|th)\b|\d{1,2}\/\d{1,2}/i;
 
+/* "mixed" when every court is the same, else "court 1 mixed, court 2 any
+   combination" — so the reply shows per-court setups as they are. */
+export function describeModes(modes, courts) {
+  const list = Array.from({ length: courts }, (_, i) => (modes && modes[i + 1]) || 'open');
+  if (list.every(m => m === list[0])) return MODE_WORDS[list[0]];
+  return list.map((m, i) => `court ${i + 1} ${MODE_WORDS[m]}`).join(', ');
+}
+
 export function buildEdit(text, ai, current, players, opts = {}) {
   if (ai && ai.understood === false && ai.isEvent === false) return null;
   if (ai) {
@@ -538,7 +554,7 @@ export function buildEdit(text, ai, current, players, opts = {}) {
   const newSegments = hasSegments ? buildSegments(model.segments, next) : null;
   if (newSegments && !sameSegments(newSegments, current.segments)) {
     changes.segments = newSegments;
-    said.push(`Play format: ${changes.segments.map(s => `${fmtTime(s.start)}–${fmtTime(s.end)} ${MODE_WORDS[Object.values(s.modes)[0] || 'open']}`).join(', ')}`);
+    said.push(`Play format: ${changes.segments.map(s => `${fmtTime(s.start)}–${fmtTime(s.end)} ${describeModes(s.modes, next.courts)}`).join('; ')}`);
   }
   const nameOf = id => (players.find(p => p.id === id) || {}).name;
   if (addIds.length) { changes.addIds = addIds; said.push(`Added ${addIds.map(nameOf).join(', ')}`); }
