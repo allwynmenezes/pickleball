@@ -34,6 +34,8 @@ const SAMPLES = [
   ['move it to Friday', { date: '2026-10-02' }],
   ['change it to Thursday 7 to 10pm', { date: '2026-10-01', startTime: '19:00' }],
   ['make the games 12 minutes', { gameLenMin: 12 }],
+  ['Can you update the game length to be 20mins each?', { gameLenMin: 20 }],
+  ['each game should be 18 minutes', { gameLenMin: 18 }],
   ['mixed for the last hour', { segments: ['18:00-20:00:open', '20:00-21:00:mixed'] }],
   ["women's doubles for the first hour, then open play", { segments: ['18:00-19:00:women', '19:00-21:00:open'] }],
   ['take a 15 minute break at 7:30', { segments: ['18:00-19:30:open', '19:30-19:45:break', '19:45-21:00:open'] }],

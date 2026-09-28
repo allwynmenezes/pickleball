@@ -62,8 +62,15 @@ function readText(text, { now, tzOffsetMin = 0 } = {}) {
   // and a half hours", or a bare "2hrs" (hours only — a bare "15 min" is
   // usually the game length).
   const HALF = '(\\s+and\\s+a\\s+half)?';
-  const game = find(new RegExp(`\\b${NUM}[\\s-]*(?:minutes?|mins?)[\\s-]+games?\\b`, 'i'))
-    || find(new RegExp(`\\bgames?\\s+(?:of|are|at)\\s+${NUM}\\s*(?:minutes?|mins?)\\b`, 'i'));
+  // Game length: "15-minute games", "games of 12 minutes", "game length
+  // (to be) 20 mins", "20 mins each / per game / rounds", "each game 20
+  // minutes", "games should be 20 minutes".
+  const MINS = '\\s*(?:minutes?|mins?)\\b';
+  const game = find(new RegExp(`\\b${NUM}[\\s-]*(?:minutes?|mins?)[\\s-]+(?:games?|rounds?)\\b`, 'i'))
+    || find(new RegExp(`\\b(?:games?|rounds?)\\s+(?:of|are|at|last|lasting|should be|to be|will be|be)\\s+${NUM}${MINS}`, 'i'))
+    || find(new RegExp(`\\b(?:games?|rounds?)[\\s-]*(?:length|len|time|duration)\\b[^0-9]{0,24}?${NUM}${MINS}`, 'i'))
+    || find(new RegExp(`\\b(?:each|every|per)\\s+(?:game|round)\\b[^0-9]{0,16}?${NUM}${MINS}`, 'i'))
+    || find(new RegExp(`\\b${NUM}${MINS}\\s*(?:each|per game|a game|per round|a round)\\b`, 'i'));
   if (game) out.gameLenMin = num(game[1]);
   const dur = find(new RegExp(`\\bfor\\s+${NUM}${HALF}\\s*(hours?|hrs?|h|minutes?|mins?)\\b${HALF}`, 'i'))
     || find(new RegExp(`\\b${NUM}${HALF}\\s*(hours?|hrs?)\\b${HALF}`, 'i'));

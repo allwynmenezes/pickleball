@@ -47,15 +47,22 @@ await page.route('**/api/state', async route => {
   return reply(route, 200, state);
 });
 await page.route('**/api/auth/me', route => reply(route, 200, { player: me }));
-await page.route('**/api/ai/parse-event', route => reply(route, 200, {
+let parseCalls = 0;
+await page.route('**/api/ai/parse-event', route => (++parseCalls, /game length/i.test(JSON.parse(route.request().postData()).text)
+  ? reply(route, 422, { error: "Couldn't find event details in that. Try something like \"Tuesday 6 to 9pm, 4 courts\"." })
+  : reply(route, 200, {
   draft: { name: 'Friday Mixer', date: day(5), startTime: '19:00', durationMin: 120, courts: 2, gameLenMin: 12,
     segments: [{ start: '19:00', end: '20:00', modes: { 1: 'mixed', 2: 'mixed' } }, { start: '20:00', end: '21:00', modes: {} }], memberIds: ['p2', 'p3'] },
   filled: ['name', 'date', 'startTime', 'durationMin', 'courts', 'gameLenMin', 'segments', 'players'], unmatchedNames: [], courtsFrom: 8, aiUsed: true,
-}));
+})));
 let editCalls = 0;
 await page.route('**/api/ai/edit-event', route => {
   editCalls++;
   const { text } = JSON.parse(route.request().postData());
+  if (/game length/i.test(text)) {
+    const { event } = JSON.parse(route.request().postData());
+    return reply(route, 200, { changes: { gameLenMin: 20 }, summary: `Games ${event.gameLenMin} → 20 min`, unmatchedNames: [], aiUsed: true });
+  }
   if (/weather/i.test(text)) return reply(route, 422, { error: 'That doesn\'t look like a change to this event. Try something like "move it to 7pm" or "add Sam".' });
   return reply(route, 200, { changes: { courts: 4, addIds: ['p3'] }, summary: 'Courts 3 → 4 · Added Dev', unmatchedNames: [], aiUsed: true });
 });
@@ -114,6 +121,15 @@ await step('a description becomes a message with the assistant\'s reply, and fil
   assert.ok(values.includes('Friday Mixer') && values.includes('12') && values.includes('2') && values.includes('120'), JSON.stringify(values));
   await page.screenshot({ path: `${SHOTS}/a2-new-event.png`, fullPage: true });
 });
+await step('a follow-up changes the form instead of starting over', async () => {
+  const before = parseCalls;
+  await page.getByLabel('Message the assistant').fill('Can you update the game length to be 20mins each?');
+  await page.getByLabel('Send').click();
+  await page.getByText(/Games 12 → 20 min. Check the details below/).waitFor({ timeout: 10000 });
+  assert.equal(parseCalls, before, 'a follow-up is a change, not a new description');
+  const values = await page.locator('input').evaluateAll(els => els.map(e => e.value));
+  assert.ok(values.includes('20') && values.includes('Friday Mixer'), JSON.stringify(values));
+});
 let newId;
 await step('Create keeps the conversation with the event', async () => {
   await page.getByText('Create event', { exact: true }).click();
@@ -122,8 +138,22 @@ await step('Create keeps the conversation with the event', async () => {
   const ev = puts[puts.length - 1].events.find(e => e.name === 'Friday Mixer');
   assert.ok(ev, 'event saved');
   newId = ev.id;
-  assert.deepEqual(ev.aiMessages.map(m => m.role), ['user', 'assistant']);
-  assert.equal(ev.gameLenMin, 12);
+  assert.deepEqual(ev.aiMessages.map(m => m.role), ['user', 'assistant', 'user', 'assistant']);
+  assert.equal(ev.gameLenMin, 20);
+});
+
+await step("a first message that isn't a description changes the form", async () => {
+  await page.getByText('Friday Mixer').first().waitFor();
+  await page.waitForTimeout(1000);
+  await page.getByText('New Event', { exact: true }).last().click();
+  await page.getByText('Game length (min)').waitFor({ timeout: 10000 });
+  await page.getByLabel('Message the assistant').fill('set the game length to 20 mins');
+  await page.getByLabel('Send').click();
+  await page.getByText(/Games 15 → 20 min. Check the details below/).waitFor({ timeout: 10000 });
+  const values = await page.locator('input').evaluateAll(els => els.map(e => e.value));
+  assert.ok(values.includes('20'), JSON.stringify(values));
+  await page.getByText('Cancel', { exact: true }).last().click();
+  await page.waitForTimeout(1000);
 });
 
 console.log('Changing an event with the assistant');
@@ -150,8 +180,8 @@ await step('Save keeps the change and the whole conversation', async () => {
   const ev = lastPutEvent(newId);
   assert.equal(ev.courts, 4);
   assert.ok(ev.memberIds.includes('p3'));
-  assert.deepEqual(ev.aiMessages.map(m => m.role), ['user', 'assistant', 'user', 'assistant', 'user', 'assistant']);
-  assert.equal(editCalls, 2);
+  assert.deepEqual(ev.aiMessages.map(m => m.role), ['user', 'assistant', 'user', 'assistant', 'user', 'assistant', 'user', 'assistant']);
+  assert.equal(editCalls, 4); // 2 form changes on New event + 2 in the event's assistant
 });
 await step('the assistant is on every step (e.g. Roster)', async () => {
   await page.getByText('Friday Mixer').first().click();

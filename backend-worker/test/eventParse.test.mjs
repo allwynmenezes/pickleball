@@ -53,6 +53,15 @@ check('"half day" is not a time; the dated range wins', () => assert.deepEqual(
   x('half day event on Oct 17 from 9 till 1, 6 courts, women first 2 hours then mixed'),
   { date: '2026-10-17', startTime: '09:00', durationMin: 240, courts: 6 },
 ));
+check('game length, however it\'s put', () => {
+  assert.equal(x('Can you update the game length to be 20mins each?').gameLenMin, 20);
+  assert.equal(x('game length 12 min').gameLenMin, 12);
+  assert.equal(x('make each game 20 minutes').gameLenMin, 20);
+  assert.equal(x('games should be 18 minutes').gameLenMin, 18);
+  assert.equal(x('20 min rounds, 3 courts').gameLenMin, 20);
+  assert.equal(x('Tuesday 6pm for 2 hours, 15 min each').gameLenMin, 15);
+  assert.equal(x('mixed for the first 30 minutes').gameLenMin, undefined, 'a part of the session is not a game length');
+});
 check('"15 min games" is not a duration', () => assert.equal(x('Monday 6pm, 15 min games').durationMin, undefined));
 check('nothing event-like → empty', () => assert.deepEqual(x('what is the weather like'), {}));
 

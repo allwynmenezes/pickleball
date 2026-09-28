@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Card, Hint } from '../lib/ui';
-import { parseEventText } from '../lib/api';
+import { parseEventText, editEventText } from '../lib/api';
 import { aiMessage } from '../lib/store';
 import { useAuth } from '../lib/auth';
 import AiChat from './AiChat';
@@ -43,27 +43,90 @@ function describeResult(r) {
   return text;
 }
 
-export default function AiEventComposer({ messages = [], onMessages, onFill }) {
+/* The form as an event, for the edit endpoint. */
+function draftToEvent(draft) {
+  const num = (v, d) => { const n = parseInt(v, 10); return Number.isFinite(n) && n > 0 ? n : d; };
+  const ev = {
+    name: draft.name || '', date: draft.date, startTime: draft.startTime,
+    durationMin: num(draft.durationMin, 240), courts: num(draft.courts, 4), gameLenMin: num(draft.gameLenMin, 15),
+    memberIds: draft.memberIds || [],
+  };
+  // Segments back to clock times, laid from the form's start time.
+  const [h, m] = ev.startTime.split(':').map(Number);
+  const clock = off => { const t = (h * 60 + m + off) % 1440; return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`; };
+  let cursor = 0;
+  ev.segments = (draft.segmentPlan && draft.segmentPlan.length ? draft.segmentPlan : [{ minutes: ev.durationMin, modes: {} }])
+    .map((s, i, all) => {
+      const len = i === all.length - 1 ? ev.durationMin - cursor : Math.min(s.minutes, ev.durationMin - cursor);
+      const seg = { start: clock(cursor), end: clock(cursor + len), modes: s.modes || {} };
+      cursor += len;
+      return seg;
+    })
+    .filter(s => s.start !== s.end);
+  return ev;
+}
+
+/* An edit's changes as form fields. */
+function changesToForm(changes, draft) {
+  const f = {};
+  ['name', 'date', 'startTime'].forEach(k => { if (changes[k] !== undefined) f[k] = changes[k]; });
+  ['durationMin', 'courts', 'gameLenMin'].forEach(k => { if (changes[k] !== undefined) f[k] = String(changes[k]); });
+  if (changes.segments) f.segmentPlan = toSegmentPlan(changes.segments);
+  if (changes.addIds || changes.removeIds) {
+    const ids = (draft.memberIds || []).filter(id => !(changes.removeIds || []).includes(id));
+    (changes.addIds || []).forEach(id => { if (!ids.includes(id)) ids.push(id); });
+    f.memberIds = ids;
+  }
+  return f;
+}
+
+/* The first message describes the event. After that — or when the first
+   message isn't a description at all, like "set the game length to 20"
+   — each message changes what's in the form, the same way the assistant
+   changes an existing event. */
+export default function AiEventComposer({ messages = [], onMessages, onFill, draft }) {
   const { player: me } = useAuth();
+  const described = messages.some(m => m.role === 'assistant' && m.filled);
+
+  const unmatchedNote = names => aiMessage('assistant', `Couldn't find ${names.length === 1 ? 'a player' : 'players'} named ${names.join(', ')}. You can add them on the event's Setup page after creating it.`, { tone: 'warn' });
+
+  async function describe(text) {
+    const r = await parseEventText(text);
+    const d = r.draft;
+    onFill({
+      name: d.name, date: d.date, startTime: d.startTime,
+      durationMin: String(d.durationMin), courts: String(d.courts),
+      gameLenMin: String(d.gameLenMin), memberIds: d.memberIds, segmentPlan: toSegmentPlan(d.segments),
+    });
+    const replies = [aiMessage('assistant', describeResult(r), { filled: true })];
+    if (r.unmatchedNames.length) replies.push(unmatchedNote(r.unmatchedNames));
+    onMessages(replies);
+  }
+
+  async function change(text) {
+    const r = await editEventText(text, draftToEvent(draft));
+    onFill(changesToForm(r.changes, draft));
+    const replies = [aiMessage('assistant', `${r.summary}. Check the details below, then tap Create event.`, { filled: true })];
+    if (r.unmatchedNames && r.unmatchedNames.length) replies.push(unmatchedNote(r.unmatchedNames));
+    onMessages(replies);
+  }
 
   async function send(text) {
     onMessages([aiMessage('user', text)]);
     try {
-      const r = await parseEventText(text);
-      const d = r.draft;
-      onFill({
-        name: d.name, date: d.date, startTime: d.startTime,
-        durationMin: String(d.durationMin), courts: String(d.courts),
-        gameLenMin: String(d.gameLenMin), memberIds: d.memberIds, segmentPlan: toSegmentPlan(d.segments),
-      });
-      const replies = [aiMessage('assistant', describeResult(r))];
-      if (r.unmatchedNames.length) {
-        replies.push(aiMessage('assistant', `Couldn't find ${r.unmatchedNames.length === 1 ? 'a player' : 'players'} named ${r.unmatchedNames.join(', ')}. You can add them on the event's Setup page after creating it.`, { tone: 'warn' }));
+      if (described) { await change(text); return; }
+      try {
+        await describe(text);
+      } catch (e) {
+        if (e.status !== 422) throw e;
+        // Not a description — maybe a change to the form. If that fails
+        // too, the description's answer is the one to show.
+        try { await change(text); } catch (e2) { throw e2.status === 422 ? e : e2; }
       }
-      onMessages(replies);
     } catch (e) {
-      // "Not an event" is an answer worth keeping in the conversation;
-      // sign-in, limits and network trouble are shown but not kept.
+      // "Not an event" / "nothing to change" are answers worth keeping in
+      // the conversation; sign-in, limits and network trouble are shown
+      // but not kept.
       if (e.status === 422) { onMessages([aiMessage('assistant', e.message, { tone: 'warn' })]); return; }
       throw new Error(e.status === 401 ? 'Sign in again to describe an event.' : e.message);
     }
@@ -73,7 +136,7 @@ export default function AiEventComposer({ messages = [], onMessages, onFill }) {
     <Card style={{ gap: 6 }}>
       <View style={{ gap: 2 }}>
         <Text style={styles.title}>Describe your event</Text>
-        <Hint>Type it, or tap the mic and say it. You can check everything before it's created.</Hint>
+        <Hint>Type it, or tap the mic and say it — then ask for changes the same way. You can check everything before it's created.</Hint>
       </View>
       <AiChat
         messages={messages}

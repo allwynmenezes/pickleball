@@ -132,6 +132,7 @@ export default function EventFlowScreen() {
             messages={draft.aiMessages || []}
             onMessages={(msgs) => setDraft((d) => ({ ...d, aiMessages: [...(d.aiMessages || []), ...msgs] }))}
             onFill={(fields) => setDraft((d) => ({ ...d, ...fields }))}
+            draft={draft}
           />
           <Card style={{ gap: 10 }}>
             <TextField label="Event name" value={draft.name} onChangeText={(v) => setDraft({ ...draft, name: v })} placeholder="e.g. Tuesday Night" autoFocus />
