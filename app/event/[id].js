@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Platform, InteractionManager } from 'react-native';
+import { View, Text, StyleSheet, Platform, InteractionManager, Pressable } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import PagerView from '../../components/StepPager';
 import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
 import { Screen, Card, Btn, TextField, DateField, Pill } from '../../lib/ui';
@@ -18,6 +19,7 @@ import RosterStep from '../../components/eventSteps/RosterStep';
 import RoundsStep from '../../components/eventSteps/RoundsStep';
 import DetailsStep from '../../components/eventSteps/DetailsStep';
 import AiEventComposer from '../../components/AiEventComposer';
+import AiEventPanel from '../../components/AiEventPanel';
 import { colors } from '../../lib/theme';
 
 const STEPS = [
@@ -40,6 +42,7 @@ export default function EventFlowScreen() {
   const pagerRef = useRef(null);
   const [allMounted, setAllMounted] = useState(false);
   const { player: me } = useAuth();
+  const [aiOpen, setAiOpen] = useState(false);
   const stepIdx = Math.max(0, STEP_KEYS.indexOf(step));
 
   /* The step you opened renders straight away, so its data is on screen as
@@ -125,7 +128,11 @@ export default function EventFlowScreen() {
         <Screen>
           <Text style={styles.title}>New event</Text>
           {/* Fills the draft below; the user still checks it and taps Create. */}
-          <AiEventComposer onFill={(fields) => setDraft((d) => ({ ...d, ...fields }))} />
+          <AiEventComposer
+            messages={draft.aiMessages || []}
+            onMessages={(msgs) => setDraft((d) => ({ ...d, aiMessages: [...(d.aiMessages || []), ...msgs] }))}
+            onFill={(fields) => setDraft((d) => ({ ...d, ...fields }))}
+          />
           <Card style={{ gap: 10 }}>
             <TextField label="Event name" value={draft.name} onChangeText={(v) => setDraft({ ...draft, name: v })} placeholder="e.g. Tuesday Night" autoFocus />
             <View style={styles.grid2}>
@@ -170,9 +177,11 @@ export default function EventFlowScreen() {
     if (pagerRef.current) pagerRef.current.setPage(to);
   }
 
+  const canEdit = !!(me && ev.createdBy && me.id === ev.createdBy);
+
   function renderStep(key) {
     switch (key) {
-      case 'setup': return <SetupStep ev={ev} active={step === 'setup'} onDeleteEvent={onDeleteEvent} canEdit={!!(me && ev.createdBy && me.id === ev.createdBy)} />;
+      case 'setup': return <SetupStep ev={ev} active={step === 'setup'} onDeleteEvent={onDeleteEvent} canEdit={canEdit} />;
       case 'rsvp': return <RsvpStep ev={ev} />;
       case 'booking': return <BookingStep ev={ev} />;
       case 'roster': return <RosterStep ev={ev} />;
@@ -188,6 +197,16 @@ export default function EventFlowScreen() {
         <View style={styles.flowbarTop}>
           <Text style={styles.title} numberOfLines={1}>{ev.name}</Text>
           <View style={styles.pillRow}>
+            {/* The assistant, on every step — for the host, until games start. */}
+            {canEdit && !ev.started ? (
+              <Pressable
+                onPress={() => setAiOpen(true)}
+                style={({ pressed }) => [styles.aiBtn, pressed && styles.aiBtnPressed]}
+                accessibilityRole="button" accessibilityLabel="Open the assistant"
+              >
+                <Ionicons name="sparkles" size={16} color={colors.court} />
+              </Pressable>
+            ) : null}
             <Btn title="Cancel" variant="ghost" small onPress={onCancel} />
             <Btn title="Save" small onPress={onSave} />
           </View>
@@ -215,6 +234,7 @@ export default function EventFlowScreen() {
           ))}
         </PagerView>
       )}
+      {canEdit && !ev.started ? <AiEventPanel eventId={ev.id} visible={aiOpen} onClose={() => setAiOpen(false)} /> : null}
     </View>
   );
 }
@@ -224,6 +244,8 @@ const styles = StyleSheet.create({
   grid2: { flexDirection: 'row', gap: 10 },
   pillRow: { flexDirection: 'row', gap: 8, justifyContent: 'flex-end' },
   flowbar: { backgroundColor: colors.card, borderBottomWidth: 1, borderBottomColor: colors.line },
+  aiBtn: { width: 34, height: 34, borderRadius: 17, borderWidth: 1.5, borderColor: colors.court, alignItems: 'center', justifyContent: 'center', alignSelf: 'center' },
+  aiBtnPressed: { backgroundColor: colors.courtTint },
   flowbarTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingHorizontal: 16, paddingTop: 14, paddingBottom: 10 },
   stepsRow: { flexDirection: 'row', gap: 6, paddingHorizontal: 16, paddingBottom: 12 },
   stepPill: { flex: 1, alignItems: 'center' },
