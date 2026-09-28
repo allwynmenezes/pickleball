@@ -4,6 +4,7 @@ import PagerView from '../../components/StepPager';
 import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
 import { Screen, Card, Btn, TextField, DateField, Pill } from '../../lib/ui';
 import { TimeWheelField } from '../../components/WheelPicker';
+import { localDateStr } from '../../lib/engine';
 import { useAuth } from '../../lib/auth';
 import { showConfirm } from '../../lib/confirm';
 import {
@@ -54,7 +55,7 @@ export default function EventFlowScreen() {
   }, [navigation]);
 
   const [draft, setDraft] = useState(() => ({
-    name: '', date: params.date || new Date().toISOString().slice(0, 10),
+    name: '', date: params.date || localDateStr(),
     startTime: '18:00', durationMin: '240', courts: '4',
   }));
 

@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../lib/auth';
+import { localDateStr } from '../lib/engine';
 import { colors, radius } from '../lib/theme';
 
 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -56,7 +57,7 @@ export default function Calendar({ cursor, onShift, events, selectedDate, onSele
   const startWeekday = first.getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const monthLabel = first.toLocaleString('en-US', { month: 'long', year: 'numeric' });
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = localDateStr();
 
   const cells = [];
   for (let i = 0; i < startWeekday; i++) cells.push(null);

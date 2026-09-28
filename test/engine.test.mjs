@@ -2,7 +2,7 @@
    fair sitting out, court types, warm-up repeat, partial RSVPs, kept rounds,
    and speed. Run with `npm test` from the project root. */
 import assert from 'node:assert/strict';
-import { generateRoster, pairKey, isPastEvent, splitEventsByTime } from '../lib/engine.js';
+import { generateRoster, pairKey, isPastEvent, splitEventsByTime, localDateStr } from '../lib/engine.js';
 
 let failures = 0;
 const check = (name, fn) => {
@@ -146,6 +146,10 @@ console.log('past and upcoming events');
 {
   const ev = (id, date, startTime, durationMin = 120) => ({ id, date, startTime, durationMin });
   const now = new Date(2026, 8, 27, 19, 0); // Sun 27 Sep 2026, 7pm local
+  check("today's date is the phone's local date, not UTC's", () => {
+    assert.equal(localDateStr(new Date(2026, 8, 27, 23, 30)), '2026-09-27');
+    assert.equal(localDateStr(new Date(2026, 0, 5, 0, 5)), '2026-01-05');
+  });
   check('an event that finished earlier today is past', () => assert.equal(isPastEvent(ev('a', '2026-09-27', '09:00'), now), true));
   check('an event still running is not past', () => assert.equal(isPastEvent(ev('a', '2026-09-27', '18:00'), now), false));
   check('it becomes past the minute it ends', () => {
