@@ -16,12 +16,14 @@ import { colors, radius } from '../lib/theme';
    onSend(text): Promise — throw an Error to show a message that isn't
      kept (network trouble, limits); the typed text is put back.
    scrollable: the list scrolls on its own (in a panel) rather than being
-     part of the page. */
+     part of the page.
+   listHeight: the list scrolls within this fixed height, inside a page
+     that scrolls too (the New event screen). */
 const MAX_LEN = 500;
 const fmtSecs = ms => { const s = Math.floor(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 const fmtTime = ts => new Date(ts).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 
-export default function AiChat({ messages = [], onSend, placeholder, emptyHint, signedIn = true, scrollable = false, busyLabel = 'Working on it…' }) {
+export default function AiChat({ messages = [], onSend, placeholder, emptyHint, signedIn = true, scrollable = false, listHeight, busyLabel = 'Working on it…' }) {
   const [input, setInput] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState(null);
@@ -47,9 +49,10 @@ export default function AiChat({ messages = [], onSend, placeholder, emptyHint, 
   const voice = useVoiceNote({ onText: t => send(t), canRecord: signedIn });
   const shownError = error || voice.error;
 
+  const ownScroll = scrollable || !!listHeight;
   useEffect(() => {
-    if (scrollable && scrollRef.current) setTimeout(() => scrollRef.current && scrollRef.current.scrollToEnd({ animated: true }), 50);
-  }, [messages.length, pending, scrollable]);
+    if (ownScroll && scrollRef.current) setTimeout(() => scrollRef.current && scrollRef.current.scrollToEnd({ animated: true }), 50);
+  }, [messages.length, pending, voice.transcribing, ownScroll]);
 
   const list = (
     <View style={styles.list}>
@@ -79,6 +82,14 @@ export default function AiChat({ messages = [], onSend, placeholder, emptyHint, 
     <View style={scrollable ? styles.fill : null}>
       {scrollable ? (
         <ScrollView ref={scrollRef} style={styles.fill} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">{list}</ScrollView>
+      ) : listHeight && (messages.length || pending || voice.transcribing) ? (
+        <ScrollView
+          ref={scrollRef}
+          style={[styles.fixedList, { height: listHeight }]}
+          contentContainerStyle={styles.scrollContent}
+          nestedScrollEnabled
+          keyboardShouldPersistTaps="handled"
+        >{list}</ScrollView>
       ) : list}
 
       {shownError ? <View style={styles.errorWrap}><Banner>{shownError}</Banner></View> : null}
@@ -129,6 +140,7 @@ export default function AiChat({ messages = [], onSend, placeholder, emptyHint, 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   scrollContent: { paddingVertical: 8 },
+  fixedList: { borderWidth: 1, borderColor: colors.line, borderRadius: radius.sm, backgroundColor: colors.chalk, paddingHorizontal: 8, marginTop: 4 },
   list: { gap: 10 },
   empty: { color: colors.slate, fontSize: 13, lineHeight: 19 },
   bubbleRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 6, maxWidth: '100%' },

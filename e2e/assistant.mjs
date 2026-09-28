@@ -28,7 +28,11 @@ let state = {
   players: [me, { id: 'p2', name: 'Cleo', gender: 'F', claimed: false }, { id: 'p3', name: 'Dev', gender: 'M', claimed: false }],
   events: [
     baseEvent('draft1', 'Draft Session', day(4), false),
-    baseEvent('pub1', 'League Night', day(2), true),
+    baseEvent('pub1', 'League Night', day(2), true, { segments: [
+      { start: '18:00', end: '19:00', modes: { 1: 'mixed', 2: 'men' } },
+      { start: '19:00', end: '19:15', modes: { 1: 'break', 2: 'break', 3: 'break' } },
+      { start: '19:15', end: '21:00', modes: {} },
+    ] }),
     baseEvent('old1', 'Last Week Mixer', day(-7), true),
     baseEvent('old2', 'Old Draft', day(-10), false),
   ],
@@ -69,7 +73,11 @@ await page.route('**/api/ai/edit-event', route => {
 
 let failures = 0;
 const step = async (name, fn) => {
-  try { await fn(); console.log(`  ok  - ${name}`); } catch (e) { failures++; console.error(`FAIL  - ${name}\n        ${e.message.split('\n')[0]}`); }
+  try { await fn(); console.log(`  ok  - ${name}`); } catch (e) {
+    failures++;
+    console.error(`FAIL  - ${name}\n        ${e.message.split('\n')[0]}`);
+    await page.screenshot({ path: `${SHOTS}/FAILED-assistant-${failures}.png` }).catch(() => {});
+  }
 };
 const lastPutEvent = id => { const p = puts[puts.length - 1]; return p && p.events.find(e => e.id === id); };
 
@@ -92,6 +100,29 @@ await step('Past events collapses and expands', async () => {
   await page.getByText('Last Week Mixer').waitFor({ state: 'detached', timeout: 3000 });
   await page.getByText('Past events (2)').click();
   await page.getByText('Last Week Mixer').waitFor({ timeout: 3000 });
+});
+
+console.log('Event screen layout');
+await step('steps are a numbered indicator on top; name and actions at the bottom', async () => {
+  await page.getByText('League Night').first().click();
+  const stepOne = page.getByLabel('Step 1 of 6: Setup');
+  await stepOne.waitFor({ timeout: 10000 });
+  const save = page.getByText('Save', { exact: true }).last();
+  const [s1, sv] = [await stepOne.boundingBox(), await save.boundingBox()];
+  assert.ok(s1.y < 250, `steps near the top (y=${s1.y})`);
+  assert.ok(sv.y > 915 - 110, `Save at the bottom (y=${sv.y})`);
+  await page.screenshot({ path: `${SHOTS}/a0-event-layout.png` });
+});
+await step('a break segment is highlighted in mint', async () => {
+  const tag = page.getByText('Break', { exact: true }).first();
+  await tag.waitFor({ timeout: 5000 });
+  const bg = await tag.evaluate(el => { let n = el; for (let i = 0; i < 6 && n; i++, n = n.parentElement) { const c = getComputedStyle(n).backgroundColor; if (c === 'rgb(231, 253, 247)') return c; } return null; });
+  assert.equal(bg, 'rgb(231, 253, 247)', 'break segment sits on the mint tint');
+  await page.getByText('No games on any court.').waitFor();
+  await page.screenshot({ path: `${SHOTS}/a0-break.png`, fullPage: true });
+  // Nothing changed here: Save just closes (Cancel would ask to discard).
+  await page.getByText('Save', { exact: true }).last().click();
+  await page.waitForTimeout(1000);
 });
 
 console.log('Deleting a draft');
@@ -117,6 +148,8 @@ await step('a description becomes a message with the assistant\'s reply, and fil
   await page.getByLabel('Send').click();
   await page.getByText(/Filled in .*courts \(2, for 8 players\)/).waitFor({ timeout: 10000 });
   await page.getByText('Friday 7 to 9pm, 8 players', { exact: false }).waitFor();
+  const list = await page.getByText('Friday 7 to 9pm, 8 players', { exact: false }).evaluate(el => { let n = el; while (n && !(n.scrollHeight && getComputedStyle(n).overflowY !== 'visible' && getComputedStyle(n).height === '260px')) n = n.parentElement; return n ? n.getBoundingClientRect().height : null; });
+  assert.equal(Math.round(list), 260, 'the chat sits in a fixed-height scroll area');
   const values = await page.locator('input').evaluateAll(els => els.map(e => e.value));
   assert.ok(values.includes('Friday Mixer') && values.includes('12') && values.includes('2') && values.includes('120'), JSON.stringify(values));
   await page.screenshot({ path: `${SHOTS}/a2-new-event.png`, fullPage: true });

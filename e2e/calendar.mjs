@@ -8,7 +8,10 @@ import assert from 'node:assert/strict';
 const APP = process.env.APP_URL || 'http://localhost:5055';
 const monthLabel = (offset) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() + offset); return d.toLocaleString('en-US', { month: 'long', year: 'numeric' }); };
 const me = { id: 'host1', name: 'Hana Host', gender: 'F', claimed: true };
-const state = { players: [me], events: [], chats: [], history: {}, flagThreshold: 3, currentEventId: null };
+// Enough past events that the list scrolls.
+const pad = n => String(n).padStart(2, '0');
+const past = Array.from({ length: 14 }, (_, i) => { const d = new Date(); d.setDate(d.getDate() - 3 - i * 4); return { id: 'e' + i, name: `Session ${i + 1}`, date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`, startTime: '18:00', durationMin: 120, courts: 2, segments: [], rsvps: {}, memberIds: [], published: true, createdBy: 'host1' }; });
+const state = { players: [me], events: past, chats: [], history: {}, flagThreshold: 3, currentEventId: null };
 
 const browser = await chromium.launch({ executablePath: process.env.BROWSER || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe' });
 const page = await browser.newPage({ viewport: { width: 412, height: 915 }, hasTouch: false });
@@ -20,7 +23,11 @@ await page.route('**/api/auth/me', r => r.fulfill({ status: 200, contentType: 'a
 
 let failures = 0;
 const step = async (name, fn) => {
-  try { await fn(); console.log(`  ok  - ${name}`); } catch (e) { failures++; console.error(`FAIL  - ${name}\n        ${e.message.split('\n')[0]}`); }
+  try { await fn(); console.log(`  ok  - ${name}`); } catch (e) {
+    failures++;
+    console.error(`FAIL  - ${name}\n        ${e.message.split('\n')[0]}`);
+    await page.screenshot({ path: `screenshots/FAILED-calendar-${failures}.png` }).catch(() => {});
+  }
 };
 // A finger drag across the calendar grid: press on a day, move in steps, release.
 async function swipe(dx, { steps = 12, anchor = '15' } = {}) {
@@ -49,6 +56,20 @@ const shown = async (label) => page.getByText(label, { exact: true }).filter({ v
 await page.goto(APP + '/');
 await shown(monthLabel(0));
 
+await step('scrolling moves the lists; the calendar stays put', async () => {
+  const label = page.getByText(monthLabel(0), { exact: true }).filter({ visible: true }).first();
+  const before = (await label.boundingBox()).y;
+  const listItem = page.getByText('Session 3', { exact: true });
+  const itemBefore = (await listItem.boundingBox()).y;
+  const box = await page.getByText('Past events (14)').boundingBox();
+  await page.mouse.move(box.x + 20, box.y + 40);
+  await page.mouse.wheel(0, 400);
+  await page.waitForTimeout(500);
+  assert.equal((await label.boundingBox()).y, before, 'calendar did not move');
+  assert.ok((await listItem.boundingBox()).y < itemBefore - 100, 'list scrolled');
+  await page.mouse.wheel(0, -2000);
+  await page.waitForTimeout(300);
+});
 await step('swipe left shows the next month', async () => { await swipe(-260); await shown(monthLabel(1)); });
 await step('swipe right twice goes back two months', async () => { await swipe(260); await swipe(260); await shown(monthLabel(-1)); });
 await step('a short drag springs back to the same month', async () => { await swipe(-50); await shown(monthLabel(-1)); });
@@ -65,7 +86,8 @@ await step('tapping a day after swiping still selects it', async () => {
 await step('the date picker calendar swipes too', async () => {
   await page.getByText('New Event', { exact: true }).last().click();
   await page.getByText('Game length (min)').waitFor({ timeout: 10000 });
-  await page.locator('text=/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun), /').first().click(); // the Date field
+  // The Date field shows the full date with the year (list rows don't).
+  await page.locator(String.raw`text=/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun), [A-Z][a-z]{2} \d{1,2}, \d{4}$/`).filter({ visible: true }).last().click();
   await page.waitForTimeout(600);
   await shown(monthLabel(0));
   await swipe(-260, { anchor: '20' });

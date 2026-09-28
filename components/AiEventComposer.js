@@ -143,6 +143,7 @@ export default function AiEventComposer({ messages = [], onMessages, onFill, dra
         onSend={send}
         signedIn={!!me}
         busyLabel="Reading your description…"
+        listHeight={260}
         placeholder="e.g. Next Tuesday 6 to 10pm, 8 players, 15-minute games, mixed for the first hour, add Priya and Sam"
       />
     </Card>

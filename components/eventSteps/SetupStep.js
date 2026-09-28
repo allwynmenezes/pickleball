@@ -9,7 +9,7 @@ import {
   addPlayerToEvent, addAllPlayersToEvent, addNewPlayerToEvent, removeEventPlayer, useStore, getPlayerById, editPlayer,
   courtLabelForRange, checkpointEventFlow, playerName,
 } from '../../lib/store';
-import { fmtClock, offsetToClock, toOffset, timeOptions, gameLen, segmentGameLen, eventStatus, STATUS_BADGE } from '../../lib/engine';
+import { fmtClock, offsetToClock, toOffset, timeOptions, gameLen, segmentGameLen, eventStatus, STATUS_BADGE, isBreakSegment } from '../../lib/engine';
 import { colors, radius } from '../../lib/theme';
 
 const GENDERS = [{ label: 'Male', value: 'M' }, { label: 'Female', value: 'F' }, { label: 'Other', value: 'O' }];
@@ -113,7 +113,8 @@ export default function SetupStep({ ev, onDeleteEvent, canEdit, active }) {
           return (
             <React.Fragment key={idx}>
             {idx > 0 ? <View style={styles.segDivider} /> : null}
-            <View style={styles.segBar}>
+            <View style={[styles.segBar, isBreakSegment(ev, s) && styles.breakSeg]}>
+              {isBreakSegment(ev, s) ? <BreakTag style={{ marginBottom: 6 }} /> : null}
               <View style={styles.grid2}>
                 <Field label="Starts at"><Text style={styles.disabledInput}>{fmtClock(s.start)}</Text></Field>
                 {isLast ? (
@@ -201,10 +202,17 @@ function SetupSummary({ ev, canEdit, onEdit, onDelete }) {
         {ev.segments.map((s, idx) => (
           <React.Fragment key={idx}>
           {idx > 0 ? <View style={styles.segDivider} /> : null}
-          <View style={styles.summarySeg}>
-            <Text style={styles.summarySegTime}>{fmtClock(s.start)} – {fmtClock(s.end)} · {segmentGameLen(ev, s)} min games</Text>
-            {courtOpts.map(c => (
-              <Text key={c} style={styles.summarySegMode}>
+          <View style={[styles.summarySeg, isBreakSegment(ev, s) && styles.breakSummary]}>
+            {isBreakSegment(ev, s) ? (
+              <View style={styles.breakHead}>
+                <Text style={styles.summarySegTime}>{fmtClock(s.start)} – {fmtClock(s.end)}</Text>
+                <BreakTag />
+              </View>
+            ) : (
+              <Text style={styles.summarySegTime}>{fmtClock(s.start)} – {fmtClock(s.end)} · {segmentGameLen(ev, s)} min games</Text>
+            )}
+            {isBreakSegment(ev, s) ? <Text style={styles.breakNote}>No games on any court.</Text> : courtOpts.map(c => (
+              <Text key={c} style={[styles.summarySegMode, (s.modes || {})[c] === 'break' && styles.breakCourt]}>
                 {courtLabelForRange(ev, c, toOffset(ev, s.start), toOffset(ev, s.end))} · {modeLabel((s.modes || {})[c] || 'open')}
               </Text>
             ))}
@@ -230,6 +238,16 @@ function SetupSummary({ ev, canEdit, onEdit, onDelete }) {
       {canEdit && !ev.published ? (
         <Btn title="Delete draft" icon="trash" variant="ghost" small dangerText onPress={onDelete} style={{ alignSelf: 'flex-end', marginTop: 14 }} />
       ) : null}
+    </View>
+  );
+}
+
+/* Breaks stand out in mint, the app's "ball" colour. */
+function BreakTag({ style }) {
+  return (
+    <View style={[styles.breakTag, style]}>
+      <Ionicons name="cafe-outline" size={12} color={colors.ballText} />
+      <Text style={styles.breakTagText}>Break</Text>
     </View>
   );
 }
@@ -335,6 +353,13 @@ const styles = StyleSheet.create({
   infoLabel: { fontSize: 12.5, color: colors.slate, fontWeight: '600' },
   infoValue: { fontSize: 13.5, color: colors.ink, flexShrink: 1, textAlign: 'right' },
   summarySeg: { borderLeftWidth: 3, borderLeftColor: colors.court, paddingLeft: 12, gap: 3 },
+  breakSeg: { backgroundColor: colors.ballTint, borderRadius: radius.sm, padding: 10, borderLeftWidth: 3, borderLeftColor: colors.ball },
+  breakSummary: { backgroundColor: colors.ballTint, borderLeftColor: colors.ball, borderRadius: radius.sm, paddingVertical: 10, paddingRight: 10 },
+  breakHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  breakNote: { fontSize: 13, color: colors.ballText },
+  breakCourt: { color: colors.ballText, fontWeight: '600' },
+  breakTag: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', backgroundColor: colors.ball, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
+  breakTagText: { fontSize: 11, fontWeight: '700', color: colors.ballText, textTransform: 'uppercase', letterSpacing: 0.5 },
   segDivider: { height: 1, backgroundColor: colors.line, marginVertical: 14 },
   segLenRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, marginBottom: 12 },
   segLenHint: { flex: 1, marginTop: 0, marginBottom: 10 },

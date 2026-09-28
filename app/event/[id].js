@@ -3,7 +3,9 @@ import { View, Text, StyleSheet, Platform, InteractionManager, Pressable } from 
 import { Ionicons } from '@expo/vector-icons';
 import PagerView from '../../components/StepPager';
 import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
-import { Screen, Card, Btn, TextField, DateField, Pill } from '../../lib/ui';
+import { Screen, Card, Btn, TextField, DateField } from '../../lib/ui';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import StepIndicator from '../../components/StepIndicator';
 import { TimeWheelField } from '../../components/WheelPicker';
 import { localDateStr } from '../../lib/engine';
 import { useAuth } from '../../lib/auth';
@@ -43,6 +45,7 @@ export default function EventFlowScreen() {
   const [allMounted, setAllMounted] = useState(false);
   const { player: me } = useAuth();
   const [aiOpen, setAiOpen] = useState(false);
+  const insets = useSafeAreaInsets();
   const stepIdx = Math.max(0, STEP_KEYS.indexOf(step));
 
   /* The step you opened renders straight away, so its data is on screen as
@@ -194,29 +197,10 @@ export default function EventFlowScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.chalk }}>
-      <View style={styles.flowbar}>
-        <View style={styles.flowbarTop}>
-          <Text style={styles.title} numberOfLines={1}>{ev.name}</Text>
-          <View style={styles.pillRow}>
-            {/* The assistant, on every step — for the host, until games start. */}
-            {canEdit && !ev.started ? (
-              <Pressable
-                onPress={() => setAiOpen(true)}
-                style={({ pressed }) => [styles.aiBtn, pressed && styles.aiBtnPressed]}
-                accessibilityRole="button" accessibilityLabel="Open the assistant"
-              >
-                <Ionicons name="sparkles" size={16} color={colors.court} />
-              </Pressable>
-            ) : null}
-            <Btn title="Cancel" variant="ghost" small onPress={onCancel} />
-            <Btn title="Save" small onPress={onSave} />
-          </View>
-        </View>
-        <View style={styles.stepsRow}>
-          {STEPS.map(([key, label]) => (
-            <Pill key={key} label={label} active={step === key} outline onPress={() => goToStep(key)} style={styles.stepPill} />
-          ))}
-        </View>
+      {/* Steps on top; the event's name and actions sit at the bottom, in
+          thumb reach. */}
+      <View style={styles.stepsBar}>
+        <StepIndicator steps={STEPS} current={step} onSelect={goToStep} />
       </View>
       {Platform.OS === 'web' ? (
         <Screen>{renderStep(step)}</Screen>
@@ -235,6 +219,23 @@ export default function EventFlowScreen() {
           ))}
         </PagerView>
       )}
+      <View style={[styles.actionBar, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+        <Text style={styles.title} numberOfLines={1}>{ev.name}</Text>
+        <View style={styles.pillRow}>
+          {/* The assistant, on every step — for the host, until games start. */}
+          {canEdit && !ev.started ? (
+            <Pressable
+              onPress={() => setAiOpen(true)}
+              style={({ pressed }) => [styles.aiBtn, pressed && styles.aiBtnPressed]}
+              accessibilityRole="button" accessibilityLabel="Open the assistant"
+            >
+              <Ionicons name="sparkles" size={16} color={colors.court} />
+            </Pressable>
+          ) : null}
+          <Btn title="Cancel" variant="ghost" small onPress={onCancel} />
+          <Btn title="Save" small onPress={onSave} />
+        </View>
+      </View>
       {canEdit && !ev.started ? <AiEventPanel eventId={ev.id} visible={aiOpen} onClose={() => setAiOpen(false)} /> : null}
     </View>
   );
@@ -244,10 +245,12 @@ const styles = StyleSheet.create({
   title: { fontWeight: '600', fontSize: 16, color: colors.ink, flexShrink: 1 },
   grid2: { flexDirection: 'row', gap: 10 },
   pillRow: { flexDirection: 'row', gap: 8, justifyContent: 'flex-end' },
-  flowbar: { backgroundColor: colors.card, borderBottomWidth: 1, borderBottomColor: colors.line },
+  stepsBar: { backgroundColor: colors.card, borderBottomWidth: 1, borderBottomColor: colors.line },
+  actionBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+    paddingHorizontal: 16, paddingTop: 10, backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.line,
+    shadowColor: colors.courtDeep, shadowOpacity: 0.08, shadowRadius: 8, shadowOffset: { width: 0, height: -2 }, elevation: 8,
+  },
   aiBtn: { width: 34, height: 34, borderRadius: 17, borderWidth: 1.5, borderColor: colors.court, alignItems: 'center', justifyContent: 'center', alignSelf: 'center' },
   aiBtnPressed: { backgroundColor: colors.courtTint },
-  flowbarTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingHorizontal: 16, paddingTop: 14, paddingBottom: 10 },
-  stepsRow: { flexDirection: 'row', gap: 6, paddingHorizontal: 16, paddingBottom: 12 },
-  stepPill: { flex: 1, alignItems: 'center' },
 });

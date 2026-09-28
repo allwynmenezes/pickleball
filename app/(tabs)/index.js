@@ -90,7 +90,7 @@ export default function EventsScreen() {
 
   const selectedDayBlock = selectedDate ? (
     <View>
-      <SectionTitle first={isWideWeb}>{fmtDateLong(selectedDate)}</SectionTitle>
+      <SectionTitle first>{fmtDateLong(selectedDate)}</SectionTitle>
       <Card>
         {dayEvents.length === 0 ? (
           <Text style={styles.emptyHint}>No events on this day yet. Tap <Text style={styles.emptyHintStrong}>+ New Event</Text> to create one.</Text>
@@ -107,7 +107,7 @@ export default function EventsScreen() {
 
   const upcomingBlock = events.length > 0 ? (
     <View>
-      <SectionTitle first={isWideWeb && !selectedDate}>Upcoming events ({upcoming.length})</SectionTitle>
+      <SectionTitle first={!selectedDate}>Upcoming events ({upcoming.length})</SectionTitle>
       <Card>
         {upcoming.length === 0 ? (
           <Text style={styles.emptyHint}>Nothing coming up. Tap <Text style={styles.emptyHintStrong}>+ New Event</Text> to plan the next one.</Text>
@@ -150,9 +150,9 @@ export default function EventsScreen() {
 
   return (
     <View style={styles.wrap}>
-      <Screen contentStyle={{ paddingBottom: isWideWeb ? 60 : 140 }}>
-        <SectionTitle first={!isWideWeb}>Events</SectionTitle>
-        {isWideWeb ? (
+      {isWideWeb ? (
+        <Screen contentStyle={{ paddingBottom: 60 }}>
+          <SectionTitle>Events</SectionTitle>
           <View style={styles.webRow}>
             <View style={styles.webCalCol}>{calendarBlock}</View>
             <View style={styles.webListCol}>
@@ -162,16 +162,23 @@ export default function EventsScreen() {
               {emptyBlock}
             </View>
           </View>
-        ) : (
-          <View>
+        </Screen>
+      ) : (
+        <>
+          {/* The calendar stays put (swipe it to change month); only the
+              lists below it scroll. */}
+          <View style={styles.fixedTop}>
+            <SectionTitle first>Events</SectionTitle>
             {calendarBlock}
+          </View>
+          <Screen contentStyle={styles.listScroll}>
             {selectedDayBlock}
             {upcomingBlock}
             {pastBlock}
             {emptyBlock}
-          </View>
-        )}
-      </Screen>
+          </Screen>
+        </>
+      )}
 
       <Pressable
         onPress={() => {
@@ -192,6 +199,8 @@ export default function EventsScreen() {
 
 const styles = StyleSheet.create({
   wrap: { flex: 1 },
+  fixedTop: { paddingHorizontal: 16, paddingTop: 16, borderBottomWidth: 1, borderBottomColor: colors.line, backgroundColor: colors.chalk },
+  listScroll: { paddingTop: 14, paddingBottom: 140 },
   name: { fontWeight: '600', fontSize: 14, flex: 1, color: colors.ink },
   meta: { fontSize: 12, color: colors.slate },
   emptyHint: { fontSize: 13, color: colors.slate },
