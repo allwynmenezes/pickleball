@@ -10,6 +10,7 @@ const check = (name, fn) => {
 const clone = x => JSON.parse(JSON.stringify(x));
 const court = (n, teamA, teamB, scoreA = null, scoreB = null) => ({ court: n, mode: 'open', teamA, teamB, scoreA, scoreB });
 const stored = {
+  rsvps: Object.fromEntries(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'x'].map(id => [id, { status: 'in', start: 0, end: 60 }])),
   id: 'e1', name: 'Tue', createdBy: 'host', courts: 2, published: true, started: true, currentRoundIndex: 1, memberIds: ['host', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'x'],
   options: { standings: 'winPct' }, checkedIn: { a: true },
   roster: [
@@ -42,15 +43,15 @@ check('…and can correct their own score in a played round', () => {
 });
 check('a recompute of later rounds (a player\'s RSVP change) still goes through', () => {
   // e drops out; x (in) takes e's place.
-  const out = save(ev => { ev.rsvps = { e: { status: 'out' }, x: { status: 'in', start: 0, end: 60 } }; ev.roster[2].courts[1] = court(2, ['c', 'x'], ['f', 'h']); }, 'e');
+  const out = save(ev => { ev.rsvps.e = { status: 'out' }; ev.roster[2].courts[1] = court(2, ['c', 'x'], ['f', 'h']); }, 'e');
   assert.deepEqual(out.roster[2].courts[1].teamA, ['c', 'x']);
 });
 check("…but a stale copy saved without the player's own change keeps the stored rounds", () => {
-  const out = save(ev => { ev.rsvps = { x: { status: 'in', start: 0, end: 60 } }; ev.roster[2].courts[1] = court(2, ['c', 'x'], ['f', 'h']); }, 'e');
+  const out = save(ev => { ev.roster[2].courts[1] = court(2, ['c', 'x'], ['f', 'h']); }, 'e');
   assert.deepEqual(out.roster[2].courts[1].teamA, ['c', 'e']);
 });
 check("…and a remake can't drop someone who is still coming", () => {
-  const out = save(ev => { ev.rsvps = { e: { status: 'out' }, x: { status: 'in', start: 0, end: 60 }, h: { status: 'in', start: 0, end: 60 } }; ev.roster[2].courts[1] = court(2, ['c', 'x'], ['f', 'e']); }, 'e');
+  const out = save(ev => { ev.rsvps.e = { status: 'out' }; ev.roster[2].courts[1] = court(2, ['c', 'x'], ['f', 'e']); }, 'e');
   assert.deepEqual(out.roster[2].courts[1].teamB, ['f', 'h']);
 });
 check('running the day and options are host-only', () => {
@@ -126,7 +127,7 @@ check('…later rounds: strangers, duplicates and deletions are refused', () => 
   assert.equal(cut.roster.length, 3);
 });
 check('…and a remade later game carries no score', () => {
-  const out = save(ev => { ev.rsvps = { e: { status: 'out' }, x: { status: 'in', start: 0, end: 60 } }; ev.roster[2].courts[1] = { ...court(2, ['c', 'x'], ['f', 'h']), scoreA: 11, scoreB: 0 }; }, 'e');
+  const out = save(ev => { ev.rsvps.e = { status: 'out' }; ev.roster[2].courts[1] = { ...court(2, ['c', 'x'], ['f', 'h']), scoreA: 11, scoreB: 0 }; }, 'e');
   assert.deepEqual([out.roster[2].courts[1].teamA, out.roster[2].courts[1].scoreA], [['c', 'x'], null]);
 });
 
@@ -162,6 +163,10 @@ check('…but not someone else\'s match, nor the bracket itself', () => {
   incoming.playoffs.teams[0] = ['z', 'y'];
   const out = enforceEventHosts([incoming], [prev], 'a')[0];
   assert.deepEqual([out.playoffs.matches[1].scoreA, out.playoffs.teams[0]], [null, ['a', 'b']]);
+});
+check("a player can't change someone else's RSVP", () => {
+  const out = save(ev => { ev.rsvps.b = { status: 'out' }; ev.rsvps.a = { status: 'partial', start: 0, end: 30 }; }, 'a');
+  assert.deepEqual([out.rsvps.b.status, out.rsvps.a.status], ['in', 'partial']);
 });
 check('a player can\'t start or remove playoffs; the host can', () => {
   const started = { ...clone(stored), playoffs: bracket() };

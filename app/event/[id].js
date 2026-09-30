@@ -193,7 +193,7 @@ export default function EventFlowScreen() {
   function renderStep(key) {
     switch (key) {
       case 'setup': return <SetupStep ev={ev} active={current === 'setup'} onDeleteEvent={onDeleteEvent} canEdit={canEdit} />;
-      case 'rsvp': return <RsvpStep ev={ev} />;
+      case 'rsvp': return <RsvpStep ev={ev} meId={me ? me.id : null} canEdit={canRun} />;
       case 'booking': return <BookingStep ev={ev} />;
       case 'roster': return <RosterStep ev={ev} />;
       case 'rounds': return <RoundsStep ev={ev} canEdit={canRun} meId={me ? me.id : null} />;

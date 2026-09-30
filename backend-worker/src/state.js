@@ -201,7 +201,15 @@ export function enforceEventHosts(incoming, stored, requester, now = Date.now())
     }
     const kept = { ...ev };
     HOST_ONLY_FIELDS.forEach(f => { if (f in prev) kept[f] = prev[f]; else delete kept[f]; });
-    if ('roster' in ev || 'roster' in prev) kept.roster = mergeRosterForPlayer(prev, ev, requester, now);
+    // Only their own RSVP (and their own no-show mark).
+    const rsvps = { ...(prev.rsvps || {}) };
+    if (requester && ev.rsvps && requester in ev.rsvps) rsvps[requester] = ev.rsvps[requester];
+    else if (requester) delete rsvps[requester];
+    if ('rsvps' in prev || 'rsvps' in ev) kept.rsvps = rsvps;
+    const noShows = (prev.noShows || []).filter(id => id !== requester);
+    if (requester && (ev.noShows || []).includes(requester)) noShows.push(requester);
+    if ('noShows' in prev || 'noShows' in ev) kept.noShows = noShows;
+    if ('roster' in ev || 'roster' in prev) kept.roster = mergeRosterForPlayer(prev, kept.rsvps ? { ...ev, rsvps: kept.rsvps } : ev, requester, now);
     if ('playoffs' in prev) kept.playoffs = mergePlayoffs(prev.playoffs, ev.playoffs, requester, false, now);
     return kept;
   });

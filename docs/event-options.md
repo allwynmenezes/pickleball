@@ -80,7 +80,10 @@ Switching presets keeps the host's `pairs`, `seedOrder` and `playoffTeams`.
   - partners are split;
   - an unscored or tied game keeps its four on the same court, and nobody moves into it, so nobody jumps two courts.
 - (f) Groups: the same four share a court for 3 rounds, and each partners every other once.
-  - Pairs and singles play in **pools** of 4: each pool has 6 games (everyone once). Every round, the courts are filled with games still to be played, and whoever has sat out most goes first; a unit plays at most one game a round. So no court is idle while a game could be played, and everyone gets games even when the event is too short for every pool to finish. A set ends when every pool has played its games. Late arrivals form a new pool once there are 4.
+  - Pairs and singles play in **pools**: everyone is in a pool of 4 (up to 7 when the numbers don't divide), and each pool plays a full round robin. Every round, the courts are filled best first, where a game is worth what its players are owed (rounds sat out). Candidates are the pool games still to be played and, for players owed a game whose pool can't give them one that round, extra games across pools (never the same game twice in a set).
+  - So no court is idle while a game could be played, the longest-waiting play first, and everyone gets games even when the event is too short for the pools to finish.
+  - A set ends when every pool has played its games. Late arrivals form a new pool once there are 4; until then they join the smallest pools.
+  - With movement per set, the top 2 of a pool move up, the bottom 2 down, and the middle of a larger pool stays.
   - Each group of players tracks its own position in its set (`groupSet.ns`) and keeps its court (`groupSet.gc`) until the set ends. A group that finishes, or loses a player, is re-formed from whoever is free.
   - Late arrivals and players sitting out get a free court as soon as 4 of them can fill one.
   - With movement per set, all groups stay in step, and a new set starts for everyone.
@@ -103,7 +106,7 @@ Switching presets keeps the host's `pairs`, `seedOrder` and `playoffTeams`.
 - The server stamps every accepted score (`scoredAt`, `scoredBy`); a phone's clock is never trusted.
 - With an edit, a phone sends `baseAt`: the stamp of the score it last saw for that game. The server takes the edit only if nobody else scored the game since, or if the last score was the same person's.
 - So an out-of-date copy, the host's included, never undoes a newer score.
-- A save that fails (offline, server error) is kept and retried by the sync loop, and nothing from the server replaces it until it goes through. A strip at the bottom says "Not saved yet… Retrying". While a save keeps failing, polls still bring in others' changes: they are merged with this phone's unsaved ones (`lib/merge.js`: our scores on the same games, our RSVPs and chat messages are kept on top of the server's copy), and the save is retried with the result. A save the server refuses outright (4xx) is dropped, the server's copy is loaded, and the strip says the change was undone.
+- A save that fails (offline, server error) is kept and retried by the sync loop, and nothing from the server replaces it until it goes through. A strip at the bottom says "Not saved yet… Retrying". While a save keeps failing, polls still bring in others' changes: they are merged with this phone's unsaved ones (`lib/merge.js`, per event, field by field: whichever side changed a field wins, ours if both did — so the host's own Next round, options, check-in and start/stop survive; whichever side remade the rounds keeps its rounds, with the other side's scores laid on top; our RSVPs and chat messages are kept, and pairing history keeps both sides' additions), and the save is retried with the result. A save the server refuses outright (4xx) is dropped, the server's copy is loaded, and the strip says the change was undone.
 - The standings table shows rank, W–L, Win % or Pts, and +/−, with the viewer's own row highlighted.
 
 **FR-5 Playoffs (`lib/playoffs.js`, Rounds step).**
@@ -153,6 +156,8 @@ Switching presets keeps the host's `pairs`, `seedOrder` and `playoffTeams`.
   - scores change only on the player's own existing games.
 - Playoffs: a non-host can change only the scores of their own matches, and not once a later match that depends on it has a score. Teams are re-resolved on the server.
 
+**FR-11 RSVPs.** A player sets only their own RSVP; the host (or anyone, for an event with no host) sets anyone's. The RSVP screen disables other players' controls, and the server keeps a non-host's changes to their own entry (and their own no-show mark) only.
+
 **FR-10 DUPR and check-in (step 1).**
 - A DUPR rating (2.000–8.000) is typed in on the Players tab (own rating) or in the host's member editor.
 - Host check-in marks each player Here or Not here. "Not here" takes the player out of unplayed rounds; "Here" brings them back.
@@ -163,7 +168,7 @@ Switching presets keeps the host's `pairs`, `seedOrder` and `playoffTeams`.
 - Men's and women's court modes apply only to plain rotating events. In format events they play as open courts. Mixed is honoured when the four allow a mixed split.
 - Groups are 4 only (no groups of 5). Brackets are 2/4/8 teams with no byes. Double elimination has no bracket reset.
 - The event assistant (AI) doesn't set format options yet.
-- Any signed-in player can still change another player's RSVP (this predates this work). The server can't tell a genuine recompute from a hand-made one that follows the rules above, so a player could arrange later rounds within those rules (QA N-3, accepted); the host's next change or "Next round" in a results-driven event remakes them.
+- The server can't tell a genuine recompute from a hand-made one that follows the rules above, so a player could arrange later rounds within those rules (QA N-3, accepted); the host's next change or "Next round" in a results-driven event remakes them.
 - Live sync is polling (8 s), not push. Two phones remaking the same provisional rounds at once end up with the last writer's version, which is regenerated anyway when the host moves on.
 
 ## 7. Where the code is

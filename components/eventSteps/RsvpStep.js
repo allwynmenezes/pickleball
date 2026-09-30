@@ -20,7 +20,9 @@ async function shareInvite(player) {
   }
 }
 
-export default function RsvpStep({ ev }) {
+/* Everyone sets their own RSVP; the host (or anyone, for an event with no
+   host) can set anyone's. The server holds non-hosts to the same rule. */
+export default function RsvpStep({ ev, meId, canEdit }) {
   const players = useStore(s => s.players);
   const memberIds = ev.memberIds || [];
   const members = memberIds.map(getPlayerById).filter(Boolean);
@@ -88,6 +90,7 @@ export default function RsvpStep({ ev }) {
       <Card>
         {members.map(p => {
           const r = ev.rsvps[p.id];
+          const off = locked || !(canEdit || p.id === meId);
           const status = r ? r.status : null;
           const isWaitlisted = waitlist.includes(p.id);
           return (
@@ -102,20 +105,20 @@ export default function RsvpStep({ ev }) {
                   {isWaitlisted ? <Badge label="Waitlist" kind="wait" /> : null}
                 </View>
                 <View style={styles.pillRow}>
-                  <Pill label="In" active={status === 'in'} activeColor={colors.court} disabled={locked} onPress={() => setRsvp(ev, p.id, 'in')} />
-                  <Pill label="Partial" active={status === 'partial'} activeColor={colors.ball} activeTextColor={colors.ink} disabled={locked} onPress={() => setRsvp(ev, p.id, 'partial')} />
-                  <Pill label="Out" active={status === 'out'} activeColor={colors.female} disabled={locked} onPress={() => setRsvp(ev, p.id, 'out')} />
+                  <Pill label="In" active={status === 'in'} activeColor={colors.court} disabled={off} onPress={() => setRsvp(ev, p.id, 'in')} />
+                  <Pill label="Partial" active={status === 'partial'} activeColor={colors.ball} activeTextColor={colors.ink} disabled={off} onPress={() => setRsvp(ev, p.id, 'partial')} />
+                  <Pill label="Out" active={status === 'out'} activeColor={colors.female} disabled={off} onPress={() => setRsvp(ev, p.id, 'out')} />
                 </View>
               </View>
               {status === 'partial' ? (
                 <View style={styles.grid2}>
                   <WheelSelectField
-                    disabled={locked}
+                    disabled={off}
                     label="From" value={offsetToClock(ev, r.start)} onValueChange={(v) => setRsvpTime(ev, p.id, 'start', v)}
                     items={roundTimeOptions(ev, r.start).map(o => ({ label: o.label, value: o.clock }))}
                   />
                   <WheelSelectField
-                    disabled={locked}
+                    disabled={off}
                     label="To" value={offsetToClock(ev, r.end)} onValueChange={(v) => setRsvpTime(ev, p.id, 'end', v)}
                     items={roundTimeOptions(ev, r.end).map(o => ({ label: o.label, value: o.clock }))}
                   />

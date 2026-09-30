@@ -356,3 +356,116 @@ Rerun the round-2 checks with:
 node --no-warnings test/qa/round2.qa.test.mjs
 cd e2e && node qa/round2-qa.mjs      # web export on :5055
 ```
+
+---
+
+## Round 3: verification of `f842f888`
+
+- **Build under test:** `f842f888` ("Fix QA round 2 defects (N-1 to N-8)"). The web export was rebuilt from this commit.
+- **Date:** 2026-09-30
+- **Rules:** As before. No application code was changed; QA added only `test/qa/round3.qa.test.mjs`, `e2e/qa/round3-qa.mjs` and this section. Nothing was deployed, committed or pushed.
+
+### R3.1 Suites
+
+| Suite | Result |
+|---|---|
+| `npm test` (now includes `test/merge.test.mjs`) | PASS: 81/81 |
+| `npm run test:qa` (formats 61, playoffs-series 16, server-rules 15, round2 24) | PASS: 116/116 |
+| `backend-worker` `npm run test:parse` | PASS: 113/113 |
+| `backend` `npm test` | PASS: 41/41 |
+| Web export | PASS: "Web Bundled" |
+| e2e `rounds`, `formats`, `calendar`, `assistant` | PASS: 7/7, 12/12, 8/8, 18/18 |
+| e2e `qa/formats-qa`, `qa/round2-qa` | PASS: 23/23, 11/11 |
+| **New:** `test/qa/round3.qa.test.mjs` | 20 pass, **7 fail** |
+| **New:** `e2e/qa/round3-qa.mjs`, with saves routed through the real `enforceEventHosts` | 3 pass, **3 fail** |
+
+**The coordinator's adapted round-2 checks are fair.** The "pools (pairs)…" and "narrow sets with movement 'set'…" checks now take the set's end as the next `groupSet.n === 0`. That matches the pool model in the updated FR-2f, and they still check all 6 match-ups, full court use and top-2-up/bottom-2-down. One caveat: if a set never ends within the event, `roster[end]` is undefined and the check would crash rather than report clearly. That can't happen at 24 players and 180 minutes.
+
+**The pool matrix was extended as asked** (round3 "1440 pool events…"). It covers:
+- 6 variants: Pool play plain, waitlist, set movement and DUPR-seeded; singles groups with and without set movement;
+- 1–4 courts;
+- 30, 45, 60, 90 and 120 minutes;
+- 8, 10, 13, 16, 18 and 24 players;
+- with and without late arrivals and early leavers.
+
+In every event, rounds are valid: nobody appears twice, everyone in the round's pool is on court or sitting out, court numbers are real, teams are the right size, no game repeats within a set, and no court is idle while a pool game could be played. What fails is fairness to units left over from pools (R3-1).
+
+### R3.2 Round-2 items: status
+
+| Item | Status | Evidence |
+|---|---|---|
+| N-1 player drops others from later rounds | **Partly fixed:** direct edits are rejected, but it reopens through RSVPs (R3-2) | round2 "a player can't drop other players…" passes; round3 "…by also changing that person's RSVP in the same save" fails |
+| N-2 court numbers | **Fixed** | round2 "…two games on the same court…" |
+| N-3 hand-made later rounds | **Accepted** (PRD §6, `docs/event-options.md:166`) | |
+| N-4 group changes court mid-set | **Fixed** | round2 "staggered groups…keeps its court" |
+| N-5 / D-8 pools on 1–4 courts | **Partly fixed:** courts are always used and every multiple-of-4 field plays, but leftover units don't (R3-1) | round2 Pool play checks; round3 matrix |
+| N-6 failing save unseen, live sync paused | **Fixed** for the first failure; residual defects R3-3, R3-4 and R3-5 | e2e round2 D-6 steps; e2e round3 "…503 shows Not saved yet…clears", "…400 says it was undone…" |
+| N-7 stale copy reverts host rounds | **Fixed** | round2 check and round3 "a stale copy saved with a chat message…" |
+| N-8 RSVP capacity heading | **Fixed** | `components/eventSteps/RsvpStep.js:87` |
+| Docs (Pool play row) | **Fixed** | `docs/event-options.md:50` |
+
+**Legitimate flows the stricter server rule still accepts** (round3 "server merge vs legitimate flows", all pass):
+- partial RSVP windows (leaving at 30 minutes, arriving at 30 minutes, and on a 20-minute segment);
+- waitlist promotion when a confirmed player drops out;
+- a waitlisted player dropping out;
+- an out player coming back in;
+- a host who doesn't play (no RSVP), and a host who does;
+- a Scramble early-leave after games have started;
+- a Pool play drop-out;
+- a Gauntlet player's own score remaking the later rounds.
+
+**Merge behaviour that works** (lib level): same-game score conflicts, chats (both sides kept, in time order), new chats on both sides, deletions both ways, and a first save that fails before any base exists.
+
+### R3.3 New defects
+
+**R3-1 (major): Pools leave leftover pairs or singles out for the whole set, often the whole event.**
+- **Where:** `lib/engine.js:708` and `:725`. `maxPools = floor(units/4)`. The 1–3 units that don't fit a pool sit until *every* pool has played all its games, and a set can run for more rounds than the event has.
+- **Steps:** round3 "pools: nobody who RSVPed (extras rotate) goes the whole event without a game…". This fails in 142 of 1,440 events: every variant and court count where the number of units isn't a multiple of 4. For example:
+  - Pool play, 10 players (5 pairs), 1 court, 60 minutes: one pair never plays while the others play 2 games each.
+  - Pool play, 18 players, 2 courts, 90 minutes: one pair plays 0 games and others play 3.
+  - Singles groups, 18 players, 3 courts, 120 minutes: 2 players play 0 games and others play 3.
+- **Expected:** PRD FR-2f (`docs/event-options.md:83`) says "everyone gets games even when the event is too short for every pool to finish". FR-2j: sit-outs are shared.
+- **Actual:** The leftover units are never scheduled. Pool play defaults to "extras rotate", so they are confirmed and expect to play.
+
+**R3-2 (major): Changing someone else's RSVP now either leaves the event inconsistent or drops that player from later rounds.**
+- **Where:** `backend-worker/src/state.js:90` (`ownRsvpChanged`) and `:100` (`available`, which reads the *incoming* RSVPs, not the stored ones). Mirrored in `backend/state.js`. RSVPs of others remain writable by any member (O-3, `docs/event-options.md:166`), and the app offers In/Out/Partial for every member (`components/eventSteps/RsvpStep.js:105-107`).
+- **(a) A flow the app offers:** e2e round3 "a player taps Out for another player…". Ben taps Out for Gus. The server stores Gus as "out" but keeps him in all 3 rounds (the save's roster change isn't Ben's own RSVP). Nobody from the waitlist is promoted, and the host sees an Out player on court. This is a regression: in `18760cd4` the recompute was accepted.
+- **(b) Adversarial:** round3 "a player can't drop someone else by also changing that person's RSVP in the same save". A player re-saves their own RSVP (for example "partial", 0–60 minutes), marks the victim out, and sends the recomputed rounds. All of it is accepted, and the victim loses every later game. This reopens N-1.
+- **Suggestion:** Make RSVPs of others host-only (or self-only), and authorise roster changes only by stored-versus-incoming changes that are the requester's own.
+
+**R3-3 (major): The merge while a save fails drops the host's own changes to the event.** This covers Next round, options, check-in and start/stop games.
+- **Where:** `lib/merge.js:29-46`. When both sides changed an event, the server's copy wins, and only our scores and RSVPs are laid on top. `docs/event-options.md:106` documents this narrowly, but nothing tells the user.
+- **Steps:** e2e round3 "host offline taps Next round while a player's score reaches the server…". The host's saves fail, the host taps Next round, and a player's score lands on the server. After the next poll and reconnecting:
+  - the server is back on round 0;
+  - the host's screen jumps back to round 1 (the first round);
+  - the strip clears as if all was saved, and no "undone" message appears.
+  
+  Also reproduced at lib level: round3 "…Next round…" and "…changes an option…".
+- **Expected:** FR-8: a server answer never undoes a local edit. If an edit can't be kept, the user is told.
+- **Actual:** The host's action is silently lost during a live event. It needs the host's phone to be briefly offline or erroring, which is common courtside.
+
+**R3-4 (minor): Merge can leave a player "Out" but still scheduled.**
+- **Where:** `lib/merge.js:31-43`. Our RSVP is laid over the server's roster, but the roster isn't recomputed to match.
+- **Steps:** round3 "player offline drops out while the host scores…". The merged event has `p1` out and `p1` still in round 2. The retried save is then accepted (`p1`'s own RSVP changed and the roster is unchanged), so the inconsistency is stored.
+
+**R3-5 (minor): A second refused (4xx) save is undone without any message.**
+- **Where:** `lib/store.js:67`. `setSyncProblem` only notifies on a *change*, and the state stays "rejected" until a save succeeds.
+- **Steps:** e2e round3 "a second refused save…is reported too". After the first "couldn't be saved and was undone" message hides, the next refused save wipes the score box silently. A standalone probe with two 400s 10 s apart gave message 1, then nothing.
+
+**R3-6 (minor): Merge keeps local pairing history wholesale when both sides changed it.**
+- **Where:** `lib/merge.js:78`.
+- **Steps:** round3 "history: …both changed": the server's new history entries are lost. This affects matchmaking variety only.
+
+### R3.4 Release verdict
+
+**Not ready to release yet.** Everything that passed before still passes: 81 unit, 116 QA, 113 worker and 41 backend checks, and 79 browser checks across the six existing and QA browser suites. Most round-1 and round-2 defects are fixed. But three new major defects are user-visible on ordinary event nights:
+- **R3-1:** with 10 or 18 players in Pool play, a pair can go the whole night without a game.
+- **R3-2:** tapping Out for a friend now leaves them scheduled.
+- **R3-3:** a host's "Next round" tapped during a network blip is silently undone.
+
+Suggested fixes, in order:
+1. **R3-2:** make RSVPs self- or host-only on the server and in the RSVP step. This is small, and it also closes the N-1 reopening.
+2. **R3-1:** let leftover units into pool games, or form a 5-unit pool, or end a set when the event can't finish it.
+3. **R3-3/R3-4:** in the merge, keep the host's own event-level changes and recompute after laying RSVPs, or show "undone" when local changes are dropped.
+
+R3-5 and R3-6 can follow. After these fixes, rerun `npm test`, `npm run test:qa`, `node --no-warnings test/qa/round3.qa.test.mjs` and `cd e2e && node qa/round3-qa.mjs`.

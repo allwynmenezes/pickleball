@@ -65,7 +65,7 @@ export function SyncStatus() {
   const insets = useSafeAreaInsets();
   const [problem, setProblem] = useState(getSyncProblem());
   const [shownRejected, setShownRejected] = useState(false);
-  useEffect(() => onSyncProblem(p => { setProblem(p); if (p === 'rejected') setShownRejected(true); }), []);
+  useEffect(() => onSyncProblem(p => { setProblem(p); if (p === 'rejected') setShownRejected(Date.now()); }), []);
   useEffect(() => {
     if (!shownRejected) return undefined;
     const t = setTimeout(() => setShownRejected(false), 8000);

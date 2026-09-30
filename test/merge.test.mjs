@@ -46,5 +46,24 @@ check('chats keep messages from both sides; new events on either side are kept',
   assert.deepEqual(m.events.map(e => e.id).sort(), ['e1', 'e2', 'mine', 'theirs']);
 });
 
+check("the host moving on offline survives a player's score arriving meanwhile", () => {
+  const local = clone(base); local.events[0].currentRoundIndex = 1; local.events[0].options = { standings: 'winPct' }; local.events[0].roster[1].courts[0] = court(1, ['a', 'd'], ['b', 'c']);
+  const remote = clone(base); Object.assign(remote.events[0].roster[0].courts[1], { scoreA: 11, scoreB: 7, scoredAt: 9 });
+  const m = threeWayMerge(base, local, remote).events[0];
+  assert.deepEqual([m.currentRoundIndex, m.options.standings, m.roster[1].courts[0].teamA, m.roster[0].courts[1].scoreA], [1, 'winPct', ['a', 'd'], 11]);
+});
+check("rounds we remade after dropping out are kept, with the server's scores on top", () => {
+  const local = clone(base); local.events[0].rsvps.a = { status: 'out' }; local.events[0].roster[1].courts[0] = court(1, ['x', 'c'], ['b', 'd']);
+  const remote = clone(base); Object.assign(remote.events[0].roster[0].courts[0], { scoreA: 11, scoreB: 3, scoredAt: 9 });
+  const m = threeWayMerge(base, local, remote).events[0];
+  assert.deepEqual([m.rsvps.a.status, m.roster[1].courts[0].teamA, m.roster[0].courts[0].scoreA], ['out', ['x', 'c'], 11]);
+});
+check("pairing history keeps both sides' additions", () => {
+  const b = { ...clone(base), history: { 'a|b': { partner: 1, opponent: 0 } } };
+  const local = { ...clone(b), history: { 'a|b': { partner: 2, opponent: 0 } } };
+  const remote = { ...clone(b), history: { 'a|b': { partner: 1, opponent: 1 }, 'c|d': { partner: 1, opponent: 0 } } };
+  assert.deepEqual(threeWayMerge(b, local, remote).history, { 'a|b': { partner: 2, opponent: 1 }, 'c|d': { partner: 1, opponent: 0 } });
+});
+
 if (failures) { console.error(`\n${failures} failed`); process.exit(1); }
 console.log('\nall passed');

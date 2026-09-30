@@ -288,11 +288,11 @@ async function main() {
     : e));
   body = await (await putAs(null, { ...body, events: tampered })).json();
   const hostedNow = body.events.find(e => e.id === 'ev-host');
-  check("a non-host can't change the event's setup (or its host), but can RSVP", () => {
+  check("a non-host can't change the event's setup (or its host), nor someone else's RSVP", () => {
     assert.equal(hostedNow.name, 'Ava Night');
     assert.equal(hostedNow.courts, 1);
     assert.equal(hostedNow.createdBy, 'p1');
-    assert.equal(hostedNow.rsvps.p2.status, 'in');
+    assert.equal(hostedNow.rsvps.p2, undefined);
   });
   body = await (await putAs(null, { ...body, events: body.events.filter(e => e.id !== 'ev-host') })).json();
   check("a non-host can't delete the event", () => assert.ok(body.events.some(e => e.id === 'ev-host')));
