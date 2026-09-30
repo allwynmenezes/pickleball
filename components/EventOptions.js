@@ -60,7 +60,7 @@ export function EventOptionsEditor({ ev }) {
             <Checkbox label="Re-seed every round from the standings" checked={!!o.reseed} onChange={set('reseed')} />
 
             <Select label="Court groups" value={o.groups} onValueChange={set('groups')} items={items(GROUP_MODES)} />
-            {o.groups === 'fixed' ? <Hint style={styles.hint}>Each group of 4 stays on its court for 3 games and plays every partner combination{o.partners === 'rotating' ? '' : ' (pairs and singles: every opponent, over 2 courts)'}.</Hint> : null}
+            {o.groups === 'fixed' ? <Hint style={styles.hint}>{o.partners === 'rotating' ? 'Each group of 4 stays on its court for 3 games and plays every partner combination.' : (o.partners === 'singles' ? 'Players' : 'Pairs') + ' play in pools of 4–7, everyone in a pool playing each other once. Every free court is used each round, and whoever has sat out longest plays next.'}</Hint> : null}
             <Select label="Court movement" value={o.movement} onValueChange={set('movement')} items={items(movementItems)} />
             {o.movement !== 'none' ? <Hint style={styles.hint}>Court 1 is the top court. The next round is made once this round's scores are in — until then it shows as provisional.</Hint> : null}
 
