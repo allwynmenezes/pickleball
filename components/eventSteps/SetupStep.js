@@ -1,15 +1,16 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { SectionTitle, Card, Field, TextField, DateField, Hint, Btn, Row, GenderChip, EmptyState, Select, Pill } from '../../lib/ui';
+import { SectionTitle, Card, Field, TextField, DateField, Hint, Btn, Row, GenderChip, DuprChip, EmptyState, Select, Pill } from '../../lib/ui';
 import { TimeWheelField, WheelSelectField } from '../WheelPicker';
 import { showAlert, showConfirm } from '../../lib/confirm';
 import {
   updateEventField, normalizeSegments, addSegment, addBreak, removeSegment, updateSegment, updateSegmentMode, updateSegmentGameLen,
-  addPlayerToEvent, addAllPlayersToEvent, addNewPlayerToEvent, removeEventPlayer, useStore, getPlayerById, editPlayer,
+  addPlayerToEvent, addAllPlayersToEvent, addNewPlayerToEvent, removeEventPlayer, useStore, getPlayerById, editPlayer, setPlayerDupr, setEventOption,
   courtLabelForRange, checkpointEventFlow, playerName,
 } from '../../lib/store';
-import { fmtClock, offsetToClock, toOffset, timeOptions, gameLen, segmentGameLen, eventStatus, STATUS_BADGE, isBreakSegment } from '../../lib/engine';
+import { fmtClock, offsetToClock, toOffset, timeOptions, gameLen, segmentGameLen, eventStatus, STATUS_BADGE, isBreakSegment, eventOptions } from '../../lib/engine';
+import { STANDINGS_MODES } from '../../lib/standings';
 import { colors, radius } from '../../lib/theme';
 
 const GENDERS = [{ label: 'Male', value: 'M' }, { label: 'Female', value: 'F' }, { label: 'Other', value: 'O' }];
@@ -106,6 +107,8 @@ export default function SetupStep({ ev, onDeleteEvent, canEdit, active }) {
         <Btn title="Delete event" icon="trash" variant="ghost" small dangerText onPress={onDeleteEvent} style={{ alignSelf: 'flex-end' }} />
       </Card>
 
+      <EventOptions ev={ev} />
+
       <SectionTitle>Match-mode segments</SectionTitle>
       <Card>
         <Hint style={{ marginTop: 0, marginBottom: 4 }}>Segments always run back-to-back, covering the whole event with no gaps or overlaps. Move a boundary time to reshape the two segments on either side of it.</Hint>
@@ -199,7 +202,8 @@ function SetupSummary({ ev, canEdit, onEdit, onDelete }) {
         <InfoRow label="Date" value={dateLabel} />
         <InfoRow label="Time" value={`${fmtClock(ev.startTime)} – ${fmtClock(offsetToClock(ev, ev.durationMin))} (${ev.durationMin} min)`} />
         <InfoRow label="Courts" value={`${ev.courts} (capacity ${ev.courts * 4} players)`} />
-        <InfoRow label="Game length" value={`${gameLen(ev)} min per round (default)`} last />
+        <InfoRow label="Game length" value={`${gameLen(ev)} min per round (default)`} />
+        <InfoRow label="Standings" value={(STANDINGS_MODES.find(m => m.key === eventOptions(ev).standings) || STANDINGS_MODES[0]).label} last />
       </Card>
 
       <SectionTitle>Match-mode segments</SectionTitle>
@@ -233,6 +237,7 @@ function SetupSummary({ ev, canEdit, onEdit, onDelete }) {
             <View style={styles.memberNameRow}>
               <Text style={styles.memberName} numberOfLines={1}>{p.name}</Text>
               <GenderChip gender={p.gender} />
+              <DuprChip dupr={p.dupr} />
             </View>
           </Row>
         ))}
@@ -243,6 +248,28 @@ function SetupSummary({ ev, canEdit, onEdit, onDelete }) {
       {canEdit && !ev.published ? (
         <Btn title="Delete draft" icon="trash" variant="ghost" small dangerText onPress={onDelete} style={{ alignSelf: 'flex-end', marginTop: 14 }} />
       ) : null}
+    </View>
+  );
+}
+
+/* The options that turn this event into other formats (see
+   lib/engine.js DEFAULT_OPTIONS). Only standings so far. */
+function EventOptions({ ev }) {
+  const options = eventOptions(ev);
+  const blurb = {
+    off: 'No standings — games are just for fun.',
+    winPct: 'Players are ranked by the share of games they win (sitting out never counts against anyone), then by average point difference.',
+    courtPoints: 'A win on a higher court is worth more points (court 1 is the top court) — for formats where players move between courts. Ties go to average point difference.',
+  }[options.standings];
+  return (
+    <View>
+      <SectionTitle>Event options</SectionTitle>
+      <Card style={styles.fieldStack}>
+        <Field label="Standings">
+          <Select value={options.standings} onValueChange={(v) => setEventOption(ev, 'standings', v)} items={STANDINGS_MODES.map(m => ({ label: m.label, value: m.key }))} />
+        </Field>
+        <Hint style={{ marginTop: 0 }}>{blurb} Scores are entered on the Rounds step — by you, or by players for their own games.</Hint>
+      </Card>
     </View>
   );
 }
@@ -317,9 +344,15 @@ function EventMembers({ ev }) {
   const [editingId, setEditingId] = React.useState(null);
   const [editName, setEditName] = React.useState('');
   const [editGender, setEditGender] = React.useState('M');
+  const [editDupr, setEditDupr] = React.useState('');
 
-  function startEdit(p) { setEditingId(p.id); setEditName(p.name); setEditGender(p.gender); }
-  function saveEdit() { editPlayer(editingId, editName, editGender); setEditingId(null); }
+  function startEdit(p) { setEditingId(p.id); setEditName(p.name); setEditGender(p.gender); setEditDupr(p.dupr != null ? String(p.dupr) : ''); }
+  function saveEdit() {
+    const r = setPlayerDupr(editingId, editDupr);
+    if (r.error) { showAlert(r.error); return; }
+    editPlayer(editingId, editName, editGender);
+    setEditingId(null);
+  }
 
   const memberIds = ev.memberIds || [];
   const members = memberIds.map(getPlayerById).filter(Boolean);
@@ -344,6 +377,7 @@ function EventMembers({ ev }) {
                 <Pill key={g.value} label={g.label} active={editGender === g.value} onPress={() => setEditGender(g.value)} />
               ))}
             </View>
+            <TextField label="DUPR rating (optional)" value={editDupr} onChangeText={setEditDupr} keyboardType="decimal-pad" placeholder="e.g. 3.742" />
             <View style={styles.editActions}>
               <Pressable onPress={saveEdit} style={styles.iconBtn}><Ionicons name="checkmark-circle" size={18} color={colors.court} /></Pressable>
               <Pressable onPress={() => setEditingId(null)} style={styles.iconBtn}><Ionicons name="close" size={18} color={colors.slate} /></Pressable>
@@ -354,6 +388,7 @@ function EventMembers({ ev }) {
             <View style={styles.memberNameRow}>
               <Text style={styles.memberName} numberOfLines={1}>{p.name}</Text>
               <GenderChip gender={p.gender} />
+              <DuprChip dupr={p.dupr} />
             </View>
             {p.claimed ? null : (
               <Pressable onPress={() => startEdit(p)} style={styles.iconBtn}><Ionicons name="pencil" size={15} color={colors.slate} /></Pressable>

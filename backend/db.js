@@ -62,6 +62,7 @@ const PLAYER_AUTH_COLUMNS = [
   'passwordHash TEXT',
   'prevOtpHash TEXT',
   'prevOtpExpiresAt INTEGER',
+  'dupr REAL', // DUPR doubles rating, typed in (not synced); used for seeding
 ];
 const existingColumns = new Set(db.prepare('PRAGMA table_info(players)').all().map(c => c.name));
 for (const def of PLAYER_AUTH_COLUMNS) {

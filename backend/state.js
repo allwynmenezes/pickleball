@@ -11,11 +11,39 @@ const { db } = require('./db');
    them; for anyone else the stored values win. Everything else on an event
    — RSVPs, court claims, roster, scores — stays open to the whole group.
    (Same rule as the Cloudflare Worker's state.js.) */
-const HOST_ONLY_FIELDS = ['name', 'date', 'startTime', 'durationMin', 'courts', 'gameLenMin', 'segments', 'memberIds', 'courtNames', 'createdBy', 'aiMessages'];
+const HOST_ONLY_FIELDS = ['name', 'date', 'startTime', 'durationMin', 'courts', 'gameLenMin', 'segments', 'memberIds', 'courtNames', 'createdBy', 'aiMessages', 'options', 'checkedIn',
+  // Running event day is the host's job too.
+  'published', 'started', 'startedAt', 'currentRoundIndex'];
 
 /* A new event's host is whoever saves it (never someone they name); a
    non-host's edits to setup fields are reverted; a non-host can't delete an
    event (it's put back). Events with no host stay open. */
+/* A non-host's roster: rounds already played stay as stored, and any score
+   they change must be on a court they played on. The current and later rounds
+   may still be recomputed (a player's own RSVP change does that), but even
+   there only their own games' scores can change. */
+function mergeRosterForPlayer(prevRoster, incomingRoster, requester, currentIdx) {
+  if (!Array.isArray(prevRoster)) return incomingRoster;
+  if (!Array.isArray(incomingRoster)) return prevRoster;
+  const plays = c => [...(c.teamA || []), ...(c.teamB || [])].includes(requester);
+  const sameTeams = (a, b) => a && b && JSON.stringify([a.teamA, a.teamB]) === JSON.stringify([b.teamA, b.teamB]);
+  const merged = incomingRoster.map((round, i) => {
+    const prevRound = prevRoster[i];
+    const base = i < currentIdx && prevRound ? prevRound : round;
+    return {
+      ...base,
+      courts: (base.courts || []).map(c => {
+        const before = prevRound && (prevRound.courts || []).find(x => x.court === c.court);
+        const after = (round.courts || []).find(x => x.court === c.court);
+        if (!sameTeams(before, c)) return c; // a recomputed game: nothing to protect yet
+        const mine = plays(c) && sameTeams(after, c);
+        return { ...c, scoreA: mine ? after.scoreA : before.scoreA, scoreB: mine ? after.scoreB : before.scoreB };
+      }),
+    };
+  });
+  return prevRoster.slice(merged.length, currentIdx).length ? [...merged, ...prevRoster.slice(merged.length, currentIdx)] : merged;
+}
+
 function enforceEventHosts(incoming, stored, requester) {
   const storedById = new Map(stored.map(e => [e.id, e]));
   const incomingIds = new Set(incoming.map(e => e.id));
@@ -29,6 +57,7 @@ function enforceEventHosts(incoming, stored, requester) {
     if (prev.createdBy === requester) return { ...ev, createdBy: prev.createdBy };
     const kept = { ...ev };
     HOST_ONLY_FIELDS.forEach(f => { if (f in prev) kept[f] = prev[f]; else delete kept[f]; });
+    if ('roster' in ev || 'roster' in prev) kept.roster = mergeRosterForPlayer(prev.roster, ev.roster, requester, prev.currentRoundIndex || 0);
     return kept;
   });
   stored.forEach(prev => {
@@ -47,8 +76,8 @@ function readState() {
      blob every device fetches with GET /api/state, so only `claimed` (a
      safe yes/no derived from `email IS NOT NULL`) crosses that boundary.
      Anything else lives behind the dedicated auth.js endpoints instead. */
-  const players = db.prepare("SELECT id, name, gender, (email IS NOT NULL) AS claimed FROM players").all()
-    .map(p => ({ ...p, claimed: !!p.claimed }));
+  const players = db.prepare("SELECT id, name, gender, dupr, (email IS NOT NULL) AS claimed FROM players").all()
+    .map(({ dupr, ...p }) => ({ ...p, ...(dupr != null ? { dupr } : {}), claimed: !!p.claimed }));
   const events = db.prepare('SELECT id, data FROM events').all()
     .map(row => ({ id: row.id, ...JSON.parse(row.data) }));
   const chats = db.prepare('SELECT id, data FROM chats').all()
@@ -83,6 +112,9 @@ function replaceRows(table, incomingRows, toRow, protectWhere) {
   incomingRows.forEach(r => upsert.run(r.id, ...toRow.values(r)));
 }
 
+/* A DUPR doubles rating is 2.000–8.000; anything else is stored as none. */
+const duprOf = p => { const n = Number(p && p.dupr); return Number.isFinite(n) && n >= 2 && n <= 8 ? Math.round(n * 1000) / 1000 : null; };
+
 function writeState(incoming, requester = null) {
   const state = { ...defaultState(), ...incoming };
   const storedEvents = db.prepare('SELECT id, data FROM events').all().map(r => ({ id: r.id, ...JSON.parse(r.data) }));
@@ -91,8 +123,8 @@ function writeState(incoming, requester = null) {
   db.exec('BEGIN');
   try {
     replaceRows('players', state.players, {
-      columns: ['name', 'gender'],
-      values: p => [p.name, p.gender],
+      columns: ['name', 'gender', 'dupr'],
+      values: p => [p.name, p.gender, duprOf(p)],
     }, 'email IS NOT NULL');
     replaceRows('events', state.events, {
       columns: ['data'],

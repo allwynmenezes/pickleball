@@ -19,7 +19,8 @@ CREATE TABLE IF NOT EXISTS players (
   claimToken TEXT,
   claimTokenExpiresAt INTEGER,
   accountCreatedAt INTEGER,
-  passwordHash TEXT
+  passwordHash TEXT,
+  dupr REAL -- DUPR doubles rating, typed in (not synced); used for seeding
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_players_email ON players(email) WHERE email IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_players_claimToken ON players(claimToken) WHERE claimToken IS NOT NULL;

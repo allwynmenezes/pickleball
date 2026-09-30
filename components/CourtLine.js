@@ -7,6 +7,7 @@ import { colors, radius } from '../lib/theme';
 export const MODE_LABEL = { open: 'Any combination', men: "Men's", women: "Women's", mixed: 'Mixed', break: 'Break' };
 
 function TeamRow({ team, score, editable, onChangeScore }) {
+  const label = `Score for ${team.map(playerName).join(' and ')}`;
   return (
     <View style={styles.teamRow}>
       <View style={styles.teamNames}>
@@ -21,7 +22,7 @@ function TeamRow({ team, score, editable, onChangeScore }) {
         <TextInput
           keyboardType="number-pad" style={styles.scoreInput}
           value={score == null ? '' : String(score)}
-          placeholder="–"
+          placeholder="–" accessibilityLabel={label}
           onChangeText={onChangeScore}
         />
       ) : (
@@ -29,7 +30,7 @@ function TeamRow({ team, score, editable, onChangeScore }) {
         // the layout matches the editable one — just greyed out and locked.
         <TextInput
           editable={false} style={[styles.scoreInput, styles.scoreInputDisabled]}
-          value={score == null ? '' : String(score)} placeholder="–" placeholderTextColor={colors.slate}
+          value={score == null ? '' : String(score)} placeholder="–" placeholderTextColor={colors.slate} accessibilityLabel={label}
         />
       )}
     </View>

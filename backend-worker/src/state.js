@@ -9,7 +9,9 @@ import { json, err, readJson, sha256 } from './util.js';
 /* The Setup step's fields. Only the event's host (createdBy) may change
    them; for anyone else the stored values win. Everything else on an event
    — RSVPs, court claims, roster, scores — stays open to the whole group. */
-const HOST_ONLY_FIELDS = ['name', 'date', 'startTime', 'durationMin', 'courts', 'gameLenMin', 'segments', 'memberIds', 'courtNames', 'createdBy', 'aiMessages'];
+const HOST_ONLY_FIELDS = ['name', 'date', 'startTime', 'durationMin', 'courts', 'gameLenMin', 'segments', 'memberIds', 'courtNames', 'createdBy', 'aiMessages', 'options', 'checkedIn',
+  // Running event day is the host's job too.
+  'published', 'started', 'startedAt', 'currentRoundIndex'];
 
 export async function requesterId(request, db) {
   const [scheme, token] = (request.headers.get('Authorization') || '').split(' ');
@@ -22,6 +24,32 @@ export async function requesterId(request, db) {
    stored: a new event's host is whoever is saving it (never someone they
    name); a non-host's edits to setup fields are reverted; a non-host can't
    delete an event (it's put back). Events with no host stay open. */
+/* A non-host's roster: rounds already played stay as stored, and any score
+   they change must be on a court they played on. The current and later rounds
+   may still be recomputed (a player's own RSVP change does that), but even
+   there only their own games' scores can change. */
+function mergeRosterForPlayer(prevRoster, incomingRoster, requester, currentIdx) {
+  if (!Array.isArray(prevRoster)) return incomingRoster;
+  if (!Array.isArray(incomingRoster)) return prevRoster;
+  const plays = c => [...(c.teamA || []), ...(c.teamB || [])].includes(requester);
+  const sameTeams = (a, b) => a && b && JSON.stringify([a.teamA, a.teamB]) === JSON.stringify([b.teamA, b.teamB]);
+  const merged = incomingRoster.map((round, i) => {
+    const prevRound = prevRoster[i];
+    const base = i < currentIdx && prevRound ? prevRound : round;
+    return {
+      ...base,
+      courts: (base.courts || []).map(c => {
+        const before = prevRound && (prevRound.courts || []).find(x => x.court === c.court);
+        const after = (round.courts || []).find(x => x.court === c.court);
+        if (!sameTeams(before, c)) return c; // a recomputed game: nothing to protect yet
+        const mine = plays(c) && sameTeams(after, c);
+        return { ...c, scoreA: mine ? after.scoreA : before.scoreA, scoreB: mine ? after.scoreB : before.scoreB };
+      }),
+    };
+  });
+  return prevRoster.slice(merged.length, currentIdx).length ? [...merged, ...prevRoster.slice(merged.length, currentIdx)] : merged;
+}
+
 export function enforceEventHosts(incoming, stored, requester) {
   const storedById = new Map(stored.map(e => [e.id, e]));
   const incomingIds = new Set(incoming.map(e => e.id));
@@ -35,6 +63,7 @@ export function enforceEventHosts(incoming, stored, requester) {
     if (prev.createdBy === requester) return { ...ev, createdBy: prev.createdBy };
     const kept = { ...ev };
     HOST_ONLY_FIELDS.forEach(f => { if (f in prev) kept[f] = prev[f]; else delete kept[f]; });
+    if ('roster' in ev || 'roster' in prev) kept.roster = mergeRosterForPlayer(prev.roster, ev.roster, requester, prev.currentRoundIndex || 0);
     return kept;
   });
   stored.forEach(prev => {
@@ -49,7 +78,7 @@ export function defaultState() {
 
 export async function readState(db) {
   const [players, events, chats, history, config] = await db.batch([
-    db.prepare('SELECT id, name, gender, (email IS NOT NULL) AS claimed FROM players'),
+    db.prepare('SELECT id, name, gender, dupr, (email IS NOT NULL) AS claimed FROM players'),
     db.prepare('SELECT id, data FROM events'),
     db.prepare('SELECT id, data FROM chats'),
     db.prepare('SELECT data FROM history WHERE id = 1'),
@@ -58,7 +87,7 @@ export async function readState(db) {
   const historyRow = history.results[0];
   const configRow = config.results[0];
   return {
-    players: players.results.map(p => ({ id: p.id, name: p.name, gender: p.gender, claimed: !!p.claimed })),
+    players: players.results.map(p => ({ id: p.id, name: p.name, gender: p.gender, ...(p.dupr != null ? { dupr: p.dupr } : {}), claimed: !!p.claimed })),
     events: events.results.map(r => ({ id: r.id, ...JSON.parse(r.data) })),
     chats: chats.results.map(r => ({ id: r.id, ...JSON.parse(r.data) })),
     history: historyRow ? JSON.parse(historyRow.data) : {},
@@ -93,6 +122,9 @@ export async function getState(request, env) {
   return json(await readState(env.DB));
 }
 
+/* A DUPR doubles rating is 2.000–8.000; anything else is stored as none. */
+const duprOf = p => { const n = Number(p && p.dupr); return Number.isFinite(n) && n >= 2 && n <= 8 ? Math.round(n * 1000) / 1000 : null; };
+
 export async function putState(request, env) {
   const body = await readJson(request);
   const problem = validate(body);
@@ -102,7 +134,7 @@ export async function putState(request, env) {
   const storedEvents = (await db.prepare('SELECT id, data FROM events').all()).results.map(r => ({ id: r.id, ...JSON.parse(r.data) }));
   state.events = enforceEventHosts(state.events, storedEvents, await requesterId(request, db));
   const stmts = [
-    ...await replaceRowsStatements(db, 'players', state.players, ['name', 'gender'], p => [p.name, p.gender], 'email IS NOT NULL'),
+    ...await replaceRowsStatements(db, 'players', state.players, ['name', 'gender', 'dupr'], p => [p.name, p.gender, duprOf(p)], 'email IS NOT NULL'),
     ...await replaceRowsStatements(db, 'events', state.events, ['data'], e => { const { id, ...rest } = e; return [JSON.stringify(rest)]; }),
     ...await replaceRowsStatements(db, 'chats', state.chats || [], ['data'], c => { const { id, ...rest } = c; return [JSON.stringify(rest)]; }),
     db.prepare('INSERT INTO history (id, data) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data')

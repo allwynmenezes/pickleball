@@ -182,6 +182,9 @@ export default function EventFlowScreen() {
   }
 
   const canEdit = !!(me && ev.createdBy && me.id === ev.createdBy);
+  // Running event day: the host — or anyone, for older events with no host
+  // (the server leaves those open too).
+  const canRun = !ev.createdBy || canEdit;
 
   function renderStep(key) {
     switch (key) {
@@ -189,7 +192,7 @@ export default function EventFlowScreen() {
       case 'rsvp': return <RsvpStep ev={ev} />;
       case 'booking': return <BookingStep ev={ev} />;
       case 'roster': return <RosterStep ev={ev} />;
-      case 'rounds': return <RoundsStep ev={ev} />;
+      case 'rounds': return <RoundsStep ev={ev} canEdit={canRun} meId={me ? me.id : null} />;
       case 'details': return <DetailsStep />;
       default: return null;
     }
