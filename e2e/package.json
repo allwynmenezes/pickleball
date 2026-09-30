@@ -7,7 +7,8 @@
     "test": "node describe-event.mjs",
     "test:assistant": "node assistant.mjs",
     "test:calendar": "node calendar.mjs",
-    "test:rounds": "node rounds.mjs"
+    "test:rounds": "node rounds.mjs",
+    "test:formats": "node formats.mjs"
   },
   "devDependencies": {
     "playwright-core": "^1.55.0",

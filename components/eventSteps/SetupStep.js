@@ -6,11 +6,11 @@ import { TimeWheelField, WheelSelectField } from '../WheelPicker';
 import { showAlert, showConfirm } from '../../lib/confirm';
 import {
   updateEventField, normalizeSegments, addSegment, addBreak, removeSegment, updateSegment, updateSegmentMode, updateSegmentGameLen,
-  addPlayerToEvent, addAllPlayersToEvent, addNewPlayerToEvent, removeEventPlayer, useStore, getPlayerById, editPlayer, setPlayerDupr, setEventOption,
+  addPlayerToEvent, addAllPlayersToEvent, addNewPlayerToEvent, removeEventPlayer, useStore, getPlayerById, editPlayer, setPlayerDupr,
   courtLabelForRange, checkpointEventFlow, playerName,
 } from '../../lib/store';
-import { fmtClock, offsetToClock, toOffset, timeOptions, gameLen, segmentGameLen, eventStatus, STATUS_BADGE, isBreakSegment, eventOptions } from '../../lib/engine';
-import { STANDINGS_MODES } from '../../lib/standings';
+import { fmtClock, offsetToClock, toOffset, timeOptions, gameLen, segmentGameLen, eventStatus, STATUS_BADGE, isBreakSegment, perCourt, playerCapacity } from '../../lib/engine';
+import { EventOptionsEditor, EventOptionsSummary } from '../EventOptions';
 import { colors, radius } from '../../lib/theme';
 
 const GENDERS = [{ label: 'Male', value: 'M' }, { label: 'Female', value: 'F' }, { label: 'Other', value: 'O' }];
@@ -103,11 +103,11 @@ export default function SetupStep({ ev, onDeleteEvent, canEdit, active }) {
           <NumberField label="Courts available" ev={ev} field="courts" value={ev.courts} />
         </View>
         <NumberField label="Game length (min per round)" ev={ev} field="gameLenMin" value={gameLen(ev)} />
-        <Hint style={{ marginTop: 0 }}>Capacity is {ev.courts * 4} players (courts × 4). Each round is {gameLen(ev)} min unless a segment below sets its own game length; the first game doubles as warm-up. Ends at {fmtClock(offsetToClock(ev, ev.durationMin))}.</Hint>
+        <Hint style={{ marginTop: 0 }}>Capacity is {playerCapacity(ev) === Infinity ? 'unlimited (extra players sit out in turns)' : `${playerCapacity(ev)} players (courts × ${perCourt(ev)})`}. Each round is {gameLen(ev)} min unless a segment below sets its own game length; the first game doubles as warm-up. Ends at {fmtClock(offsetToClock(ev, ev.durationMin))}.</Hint>
         <Btn title="Delete event" icon="trash" variant="ghost" small dangerText onPress={onDeleteEvent} style={{ alignSelf: 'flex-end' }} />
       </Card>
 
-      <EventOptions ev={ev} />
+      <EventOptionsEditor ev={ev} />
 
       <SectionTitle>Match-mode segments</SectionTitle>
       <Card>
@@ -201,10 +201,11 @@ function SetupSummary({ ev, canEdit, onEdit, onDelete }) {
         <InfoRow label="Host" value={ev.createdBy ? playerName(ev.createdBy) : '—'} />
         <InfoRow label="Date" value={dateLabel} />
         <InfoRow label="Time" value={`${fmtClock(ev.startTime)} – ${fmtClock(offsetToClock(ev, ev.durationMin))} (${ev.durationMin} min)`} />
-        <InfoRow label="Courts" value={`${ev.courts} (capacity ${ev.courts * 4} players)`} />
-        <InfoRow label="Game length" value={`${gameLen(ev)} min per round (default)`} />
-        <InfoRow label="Standings" value={(STANDINGS_MODES.find(m => m.key === eventOptions(ev).standings) || STANDINGS_MODES[0]).label} last />
+        <InfoRow label="Courts" value={String(ev.courts)} />
+        <InfoRow label="Game length" value={`${gameLen(ev)} min per round (default)`} last />
       </Card>
+
+      <EventOptionsSummary ev={ev} canEdit={canEdit} />
 
       <SectionTitle>Match-mode segments</SectionTitle>
       <Card>
@@ -248,28 +249,6 @@ function SetupSummary({ ev, canEdit, onEdit, onDelete }) {
       {canEdit && !ev.published ? (
         <Btn title="Delete draft" icon="trash" variant="ghost" small dangerText onPress={onDelete} style={{ alignSelf: 'flex-end', marginTop: 14 }} />
       ) : null}
-    </View>
-  );
-}
-
-/* The options that turn this event into other formats (see
-   lib/engine.js DEFAULT_OPTIONS). Only standings so far. */
-function EventOptions({ ev }) {
-  const options = eventOptions(ev);
-  const blurb = {
-    off: 'No standings — games are just for fun.',
-    winPct: 'Players are ranked by the share of games they win (sitting out never counts against anyone), then by average point difference.',
-    courtPoints: 'A win on a higher court is worth more points (court 1 is the top court) — for formats where players move between courts. Ties go to average point difference.',
-  }[options.standings];
-  return (
-    <View>
-      <SectionTitle>Event options</SectionTitle>
-      <Card style={styles.fieldStack}>
-        <Field label="Standings">
-          <Select value={options.standings} onValueChange={(v) => setEventOption(ev, 'standings', v)} items={STANDINGS_MODES.map(m => ({ label: m.label, value: m.key }))} />
-        </Field>
-        <Hint style={{ marginTop: 0 }}>{blurb} Scores are entered on the Rounds step — by you, or by players for their own games.</Hint>
-      </Card>
     </View>
   );
 }

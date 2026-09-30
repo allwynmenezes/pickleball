@@ -7,7 +7,7 @@ import { Screen, Card, Btn, TextField, DateField } from '../../lib/ui';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import StepIndicator from '../../components/StepIndicator';
 import { TimeWheelField } from '../../components/WheelPicker';
-import { localDateStr } from '../../lib/engine';
+import { localDateStr, eventOptions } from '../../lib/engine';
 import { useAuth } from '../../lib/auth';
 import { showConfirm } from '../../lib/confirm';
 import {
@@ -28,7 +28,6 @@ const STEPS = [
   ['setup', 'Setup'], ['rsvp', 'RSVP'], ['booking', 'Courts'],
   ['roster', 'Roster'], ['rounds', 'Rounds'], ['details', 'Details'],
 ];
-const STEP_KEYS = STEPS.map(([key]) => key);
 
 export default function EventFlowScreen() {
   const params = useLocalSearchParams();
@@ -46,7 +45,6 @@ export default function EventFlowScreen() {
   const { player: me } = useAuth();
   const [aiOpen, setAiOpen] = useState(false);
   const insets = useSafeAreaInsets();
-  const stepIdx = Math.max(0, STEP_KEYS.indexOf(step));
 
   /* The step you opened renders straight away, so its data is on screen as
      the page slides in. Only the other steps wait — they mount once the
@@ -169,13 +167,19 @@ export default function EventFlowScreen() {
     );
   }
 
+  // A clinic (no games) has no Roster or Rounds.
+  const steps = eventOptions(ev).games === 'none' ? STEPS.filter(([k]) => k !== 'roster' && k !== 'rounds') : STEPS;
+  const stepKeys = steps.map(([key]) => key);
+  const current = stepKeys.includes(step) ? step : 'setup';
+  const stepIdx = stepKeys.indexOf(current);
+
   /* Steps live in a native pager (Android ViewPager2 / iOS UIPageViewController):
      the drag, the page settle and the neighbouring page all run on the UI
      thread, independent of JS. A pill tap highlights immediately and asks
      the pager to animate there; a swipe reports back via onPageSelected.
      The web has no native pager, so it just shows the current step. */
   function goToStep(nextKey) {
-    const to = STEP_KEYS.indexOf(nextKey);
+    const to = stepKeys.indexOf(nextKey);
     if (to === stepIdx) return;
     setStep(nextKey);
     if (pagerRef.current) pagerRef.current.setPage(to);
@@ -188,7 +192,7 @@ export default function EventFlowScreen() {
 
   function renderStep(key) {
     switch (key) {
-      case 'setup': return <SetupStep ev={ev} active={step === 'setup'} onDeleteEvent={onDeleteEvent} canEdit={canEdit} />;
+      case 'setup': return <SetupStep ev={ev} active={current === 'setup'} onDeleteEvent={onDeleteEvent} canEdit={canEdit} />;
       case 'rsvp': return <RsvpStep ev={ev} />;
       case 'booking': return <BookingStep ev={ev} />;
       case 'roster': return <RosterStep ev={ev} />;
@@ -203,19 +207,20 @@ export default function EventFlowScreen() {
       {/* Steps on top; the event's name and actions sit at the bottom, in
           thumb reach. */}
       <View style={styles.stepsBar}>
-        <StepIndicator steps={STEPS} current={step} onSelect={goToStep} />
+        <StepIndicator steps={steps} current={current} onSelect={goToStep} />
       </View>
       {Platform.OS === 'web' ? (
-        <Screen>{renderStep(step)}</Screen>
+        <Screen>{renderStep(current)}</Screen>
       ) : (
         <PagerView
+          key={stepKeys.join()}
           ref={pagerRef}
           style={{ flex: 1 }}
           initialPage={stepIdx}
-          offscreenPageLimit={STEP_KEYS.length}
-          onPageSelected={(e) => setStep(STEP_KEYS[e.nativeEvent.position])}
+          offscreenPageLimit={stepKeys.length}
+          onPageSelected={(e) => setStep(stepKeys[e.nativeEvent.position])}
         >
-          {STEP_KEYS.map((key, i) => (
+          {stepKeys.map((key, i) => (
             <View key={key} style={{ flex: 1 }} collapsable={false}>
               {allMounted || i === stepIdx ? <Screen>{renderStep(key)}</Screen> : null}
             </View>

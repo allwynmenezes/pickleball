@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { SectionTitle, Card, Btn, Banner, EmptyState, Hint, BigNum, GenderDot, LockedNote, Checkbox } from '../../lib/ui';
 import { MODE_LABEL } from '../../components/CourtLine';
-import { getConfirmedAndWaitlist, fmtClock, offsetToClock, gameLen, segmentGameLen } from '../../lib/engine';
+import { getConfirmedAndWaitlist, fmtClock, offsetToClock, gameLen, segmentGameLen, perCourt, usesFormatEngine, resultsDriven } from '../../lib/engine';
+import { formatLabel } from '../../lib/formats';
 import { previewRoster, publishRoster, useStore, playerNameGender, playerName, playerGender, courtLabel, setSwitchAfterWarmup } from '../../lib/store';
 
 import { colors } from '../../lib/theme';
@@ -47,9 +48,11 @@ function roundLenLabel(ev) {
 export default function RosterStep({ ev }) {
   const players = useStore(s => s.players);
   const { confirmed, waitlist } = getConfirmedAndWaitlist(ev, players);
-  const notEnough = confirmed.length + waitlist.length < 4;
+  const need = perCourt(ev);
+  const notEnough = confirmed.length + waitlist.length < need;
+  const formats = usesFormatEngine(ev);
 
-  if (notEnough) return <EmptyState icon="list">Need at least 4 confirmed players (In/Partial) before a roster can be generated.</EmptyState>;
+  if (notEnough) return <EmptyState icon="list">Need at least {need} confirmed players (In/Partial) before a roster can be generated.</EmptyState>;
 
   const totalGames = ev.roster ? ev.roster.reduce((s, r) => s + r.courts.length, 0) : 0;
   const flaggedCount = ev.roster ? ev.roster.reduce((s, r) => s + r.courts.filter(c => c.flagged).length, 0) : 0;
@@ -68,18 +71,23 @@ export default function RosterStep({ ev }) {
             ? "Published — rounds already played or announced (before the current round on the Rounds step) are always kept exactly as they happened; regenerating only rebuilds what's left, and scores can only be entered from the Rounds step."
             : 'Preview freely; nothing counts toward pairing history until you publish.'}
         </Hint>
-        <Checkbox
+        {formats ? (
+          <Hint style={{ marginTop: 10 }}>
+            Format: {formatLabel(ev)}.{resultsDriven(ev) ? ' Later rounds depend on results, so they\'re remade as scores come in — what\'s shown for them now is provisional.' : ''}
+          </Hint>
+        ) : null}
+        {formats ? null : <Checkbox
           label="Switch players after warm-up"
           checked={!!ev.switchAfterWarmup}
           onChange={(v) => setSwitchAfterWarmup(ev, v)}
           disabled={!!ev.started}
           style={{ marginTop: 10 }}
-        />
-        <Hint style={{ marginTop: 2 }}>
+        />}
+        {formats ? null : <Hint style={{ marginTop: 2 }}>
           {ev.switchAfterWarmup
             ? 'The round after warm-up gets fresh pairings.'
             : 'The round after warm-up keeps the exact warm-up games (same partners and opponents), as long as everyone is still available.'}
-        </Hint>
+        </Hint>}
       </Card>
 
       {!ev.roster ? <EmptyState icon="list">No roster generated yet.</EmptyState> : null}
@@ -93,7 +101,7 @@ export default function RosterStep({ ev }) {
               <BigNum value={ev.roster.length} label={roundLenLabel(ev)} />
               <BigNum value={flaggedCount} label="mode fallbacks" />
             </View>
-            {sitOutRounds.length ? <Banner>{sitOutRounds.length} round(s) have 1–3 players left over without a full court (uneven headcount) — see rounds marked below.</Banner> : null}
+            {sitOutRounds.length ? <Banner>{sitOutRounds.length} round(s) have players sitting out (more players than court spots, or an uneven headcount) — see rounds marked below.</Banner> : null}
           </Card>
 
           <SectionTitle>Game-by-game roster</SectionTitle>
@@ -103,7 +111,7 @@ export default function RosterStep({ ev }) {
               idx === (ev.currentRoundIndex || 0) && ev.published && styles.roundCurrent,
               ev.published && idx < (ev.currentRoundIndex || 0) && styles.roundPlayed,
             ]}>
-              <Text style={styles.roundHead}>{idx === 0 ? 'Warm-up · ' : ''}{fmtClock(offsetToClock(ev, r.offset))}{r.repeatsWarmup ? <Text style={styles.roundNote}> · same players as warm-up</Text> : null}</Text>
+              <Text style={styles.roundHead}>{idx === 0 ? 'Warm-up · ' : ''}{fmtClock(offsetToClock(ev, r.offset))}{r.repeatsWarmup ? <Text style={styles.roundNote}> · same players as warm-up</Text> : null}{r.groupSet ? <Text style={styles.roundNote}> · groups, game {r.groupSet.n + 1} of 3</Text> : null}{r.provisional ? <Text style={styles.roundNote}> · provisional</Text> : null}</Text>
               {r.courts.map(c => <MatchupRow key={c.court} ev={ev} court={c} offset={r.offset} />)}
               {r.sitOut && r.sitOut.length ? <Hint>Left over this round: {r.sitOut.map(id => playerNameGender(id)).join(', ')}</Hint> : null}
             </View>

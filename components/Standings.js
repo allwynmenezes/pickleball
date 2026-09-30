@@ -7,9 +7,10 @@ import { colors, radius } from '../lib/theme';
 
 /* Live standings from the scores entered so far (lib/standings.js). `mode`
    is the event's standings option: 'winPct' or 'courtPoints'. The
-   signed-in player's row is highlighted. */
-export default function Standings({ ev, mode, meId, throughRound }) {
-  const rows = computeStandings(ev, mode, throughRound);
+   signed-in player's row is highlighted. `rows` (already worked out, e.g.
+   season standings) replaces the event's own. */
+export default function Standings({ ev, mode, meId, throughRound, rows: given }) {
+  const rows = given || computeStandings(ev, mode, throughRound);
   const byPoints = mode === 'courtPoints';
   return (
     <Card>

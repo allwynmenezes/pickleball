@@ -4,15 +4,18 @@ import { Stack } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { hydrate, isHydrated } from '../lib/store';
+import { hydrate, isHydrated, startLiveSync } from '../lib/store';
 import { hydrateAuth } from '../lib/auth';
 import { ConfirmModalHost } from '../lib/ui';
 import AppHeader from '../components/AppHeader';
+import RoundNotifier from '../components/RoundNotifier';
 import { colors } from '../lib/theme';
 
 export default function RootLayout() {
   const [ready, setReady] = useState(isHydrated());
-  useEffect(() => { Promise.all([hydrate(), hydrateAuth()]).then(() => setReady(true)); }, []);
+  // After loading, keep in step with the server: others' scores and the
+  // host's round changes show up live (see startLiveSync).
+  useEffect(() => { Promise.all([hydrate(), hydrateAuth()]).then(() => { setReady(true); startLiveSync(); }); }, []);
 
   if (!ready) {
     return (
@@ -49,6 +52,7 @@ export default function RootLayout() {
             <View style={styles.webInner}>{stack}</View>
           </View>
         ) : stack}
+        <RoundNotifier />
         <ConfirmModalHost />
       </SafeAreaProvider>
     </GestureHandlerRootView>

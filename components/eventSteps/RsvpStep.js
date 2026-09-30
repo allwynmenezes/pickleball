@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { SectionTitle, Card, Hint, Badge, GenderDot, EmptyState, Pill, IconBtn, LockedNote, DashedLine } from '../../lib/ui';
 import { WheelSelectField } from '../WheelPicker';
-import { getConfirmedAndWaitlist, getRoundPool, roundTimeOptions, roundSlots, offsetToClock, fmtClock } from '../../lib/engine';
+import { getConfirmedAndWaitlist, getRoundPool, roundTimeOptions, roundSlots, offsetToClock, fmtClock, playerCapacity, perCourt } from '../../lib/engine';
 import { setRsvp, setRsvpTime, getPlayerById, playerName, playerGender, useStore } from '../../lib/store';
 import { createClaimLink } from '../../lib/api';
 import { shareClaimLink } from '../../lib/share';
@@ -33,7 +33,7 @@ export default function RsvpStep({ ev }) {
   const locked = !!ev.started;
   const timeline = roundSlots(ev).map(({ offset }) => ({ offset, count: getRoundPool(ev, offset, confirmed, waitlist).length }));
   const maxT = Math.max(1, ...timeline.map(t => t.count));
-  const capacity = ev.courts * 4;
+  const capacity = Math.min(playerCapacity(ev), ev.courts * perCourt(ev));
   // Scale so the capacity line always sits inside the chart, with headroom.
   const scaleMax = Math.max(maxT, capacity) * 1.1;
 
@@ -44,7 +44,7 @@ export default function RsvpStep({ ev }) {
       <Card>
         <View style={styles.timelineHead}>
           <Text style={styles.timelineHeadLabel}>Players on court, by round</Text>
-          <Text style={styles.timelineHeadMax}>capacity {ev.courts * 4}</Text>
+          <Text style={styles.timelineHeadMax}>capacity {capacity}</Text>
         </View>
         {/* Bars are coloured by situation — purple when every court is full,
             the RSVP "Out" pink when a court would sit empty — with the number
@@ -80,7 +80,7 @@ export default function RsvpStep({ ev }) {
           <View style={styles.timelineLegendItem}><DashedLine color={colors.ball} thickness={2.5} style={{ width: 16 }} /><Text style={styles.timelineLegendText}>Capacity</Text></View>
         </View>
         <Hint style={{ marginTop: 0 }}>
-          Peak: {maxT} players → {Math.ceil(maxT / 4)} courts needed at once. Each bar shows how many players are available that round; purple bars fill every court (capacity {capacity}), pink ones leave a court empty. Includes waitlisted players pulled in to fill gaps left by partially-available regulars.
+          Peak: {maxT} players → {Math.min(ev.courts, Math.ceil(maxT / perCourt(ev)))} courts needed at once. Each bar shows how many players are available that round; purple bars fill every court (capacity {capacity}), pink ones leave a court empty. Includes waitlisted players pulled in to fill gaps left by partially-available regulars.
         </Hint>
       </Card>
 

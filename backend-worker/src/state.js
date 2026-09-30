@@ -11,7 +11,10 @@ import { json, err, readJson, sha256 } from './util.js';
    — RSVPs, court claims, roster, scores — stays open to the whole group. */
 const HOST_ONLY_FIELDS = ['name', 'date', 'startTime', 'durationMin', 'courts', 'gameLenMin', 'segments', 'memberIds', 'courtNames', 'createdBy', 'aiMessages', 'options', 'checkedIn',
   // Running event day is the host's job too.
-  'published', 'started', 'startedAt', 'currentRoundIndex'];
+  'published', 'started', 'startedAt', 'currentRoundIndex',
+  // Playoffs (players may still score their own match — mergePlayoffs) and
+  // which series the event belongs to.
+  'playoffs', 'seriesId'];
 
 export async function requesterId(request, db) {
   const [scheme, token] = (request.headers.get('Authorization') || '').split(' ');
@@ -20,19 +23,38 @@ export async function requesterId(request, db) {
   return session && Date.now() <= session.expiresAt ? session.playerId : null;
 }
 
-/* Applies host-only rules to an incoming list of events against what's
-   stored: a new event's host is whoever is saving it (never someone they
-   name); a non-host's edits to setup fields are reverted; a non-host can't
-   delete an event (it's put back). Events with no host stay open. */
+/* Scores carry scoredAt (when they were entered, on the phone that entered
+   them). Two phones can score the same game: the newer score wins, so a
+   phone with an out-of-date copy never undoes someone else's score. */
+const sameTeams = (a, b) => !!a && !!b && JSON.stringify([a.teamA, a.teamB]) === JSON.stringify([b.teamA, b.teamB]);
+const newer = (a, b) => ((a && a.scoredAt) || 0) > ((b && b.scoredAt) || 0);
+/* c with the score (and its time) taken from src. */
+const withScore = (c, src) => { const out = { ...c, scoreA: src.scoreA, scoreB: src.scoreB }; if (src.scoredAt) out.scoredAt = src.scoredAt; else delete out.scoredAt; return out; };
+const plays = (c, id) => !!id && [...(c.teamA || []), ...(c.teamB || [])].includes(id);
+
+function keepNewerScores(prevRoster, incomingRoster) {
+  if (!Array.isArray(prevRoster) || !Array.isArray(incomingRoster)) return incomingRoster;
+  return incomingRoster.map((round, i) => {
+    const prevRound = prevRoster[i];
+    if (!prevRound || !round || prevRound.offset !== round.offset) return round;
+    return {
+      ...round,
+      courts: (round.courts || []).map(c => {
+        const before = (prevRound.courts || []).find(x => x.court === c.court);
+        return sameTeams(before, c) && newer(before, c) ? withScore(c, before) : c;
+      }),
+    };
+  });
+}
+
 /* A non-host's roster: rounds already played stay as stored, and any score
    they change must be on a court they played on. The current and later rounds
-   may still be recomputed (a player's own RSVP change does that), but even
-   there only their own games' scores can change. */
+   may still be recomputed (a player's own RSVP change, or a score in an event
+   whose next rounds depend on results, does that), but even there only their
+   own games' scores can change. */
 function mergeRosterForPlayer(prevRoster, incomingRoster, requester, currentIdx) {
   if (!Array.isArray(prevRoster)) return incomingRoster;
   if (!Array.isArray(incomingRoster)) return prevRoster;
-  const plays = c => [...(c.teamA || []), ...(c.teamB || [])].includes(requester);
-  const sameTeams = (a, b) => a && b && JSON.stringify([a.teamA, a.teamB]) === JSON.stringify([b.teamA, b.teamB]);
   const merged = incomingRoster.map((round, i) => {
     const prevRound = prevRoster[i];
     const base = i < currentIdx && prevRound ? prevRound : round;
@@ -42,14 +64,67 @@ function mergeRosterForPlayer(prevRoster, incomingRoster, requester, currentIdx)
         const before = prevRound && (prevRound.courts || []).find(x => x.court === c.court);
         const after = (round.courts || []).find(x => x.court === c.court);
         if (!sameTeams(before, c)) return c; // a recomputed game: nothing to protect yet
-        const mine = plays(c) && sameTeams(after, c);
-        return { ...c, scoreA: mine ? after.scoreA : before.scoreA, scoreB: mine ? after.scoreB : before.scoreB };
+        const mine = plays(c, requester) && sameTeams(after, c) && !newer(before, after);
+        return withScore(c, mine ? after : before);
       }),
     };
   });
   return prevRoster.slice(merged.length, currentIdx).length ? [...merged, ...prevRoster.slice(merged.length, currentIdx)] : merged;
 }
 
+/* Playoffs (see lib/playoffs.js): the host starts, changes or removes the
+   bracket; anyone may score a match they play in. Newer scores win. After
+   merging, each match's teams are worked out again from the results (the
+   same rule as resolvePlayoffs in lib/playoffs.js), so the next round's
+   players can score their match straight away. */
+function resolvePlayoffTeams(p) {
+  const res = new Map();
+  const done = m => m.teamA && m.teamB && m.scoreA != null && m.scoreB != null && m.scoreA !== m.scoreB;
+  const teamOf = src => {
+    if (!src) return null;
+    if (src.seed) return (p.teams || [])[src.seed - 1] || null;
+    const r = res.get(src.winnerOf || src.loserOf) || {};
+    return (src.winnerOf ? r.winner : r.loser) || null;
+  };
+  p.matches.forEach(m => {
+    const A = teamOf(m.a), B = teamOf(m.b);
+    if (JSON.stringify(A) !== JSON.stringify(m.teamA || null) || JSON.stringify(B) !== JSON.stringify(m.teamB || null)) {
+      if (m.teamA || m.teamB) { m.scoreA = null; m.scoreB = null; delete m.scoredAt; }
+      m.teamA = A; m.teamB = B;
+    }
+    res.set(m.id, done(m) ? (m.scoreA > m.scoreB ? { winner: A, loser: B } : { winner: B, loser: A }) : {});
+  });
+  return p;
+}
+function mergePlayoffs(prev, incoming, requester, isHost) {
+  const valid = p => !!p && Array.isArray(p.matches);
+  if (isHost) {
+    if (!valid(incoming) || !valid(prev)) return incoming;
+    const sameBracket = JSON.stringify(prev.matches.map(m => m.id)) === JSON.stringify(incoming.matches.map(m => m.id)) && JSON.stringify(prev.teams) === JSON.stringify(incoming.teams);
+    if (!sameBracket) return incoming;
+    return resolvePlayoffTeams({
+      ...incoming,
+      matches: incoming.matches.map(m => {
+        const before = prev.matches.find(x => x.id === m.id);
+        return before && sameTeams(before, m) && newer(before, m) ? withScore(m, before) : { ...m };
+      }),
+    });
+  }
+  if (!valid(prev)) return prev;
+  return resolvePlayoffTeams({
+    ...prev,
+    matches: prev.matches.map(m => {
+      const inc = valid(incoming) && incoming.matches.find(x => x.id === m.id);
+      return inc && plays(m, requester) && sameTeams(inc, m) && !newer(m, inc) ? withScore(m, inc) : { ...m };
+    }),
+  });
+}
+
+/* Applies host-only rules to an incoming list of events against what's
+   stored: a new event's host is whoever is saving it (never someone they
+   name); a non-host's edits to setup fields are reverted; a non-host can't
+   delete an event (it's put back). Events with no host stay open. Scores
+   follow the newer-wins rule for everyone. */
 export function enforceEventHosts(incoming, stored, requester) {
   const storedById = new Map(stored.map(e => [e.id, e]));
   const incomingIds = new Set(incoming.map(e => e.id));
@@ -59,11 +134,16 @@ export function enforceEventHosts(incoming, stored, requester) {
       const { createdBy, ...rest } = ev;
       return requester ? { ...rest, createdBy: requester } : rest;
     }
-    if (!prev.createdBy) return ev;
-    if (prev.createdBy === requester) return { ...ev, createdBy: prev.createdBy };
+    if (!prev.createdBy || prev.createdBy === requester) {
+      const kept = prev.createdBy ? { ...ev, createdBy: prev.createdBy } : { ...ev };
+      if ('roster' in ev) kept.roster = keepNewerScores(prev.roster, ev.roster);
+      if ('playoffs' in ev) kept.playoffs = mergePlayoffs(prev.playoffs, ev.playoffs, requester, true);
+      return kept;
+    }
     const kept = { ...ev };
     HOST_ONLY_FIELDS.forEach(f => { if (f in prev) kept[f] = prev[f]; else delete kept[f]; });
     if ('roster' in ev || 'roster' in prev) kept.roster = mergeRosterForPlayer(prev.roster, ev.roster, requester, prev.currentRoundIndex || 0);
+    if ('playoffs' in prev) kept.playoffs = mergePlayoffs(prev.playoffs, ev.playoffs, requester, false);
     return kept;
   });
   stored.forEach(prev => {
