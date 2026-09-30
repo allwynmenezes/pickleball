@@ -168,6 +168,7 @@ Switching presets keeps the host's `pairs`, `seedOrder` and `playoffTeams`.
 - Men's and women's court modes apply only to plain rotating events. In format events they play as open courts. Mixed is honoured when the four allow a mixed split.
 - Groups are 4 only (no groups of 5). Brackets are 2/4/8 teams with no byes. Double elimination has no bracket reset.
 - The event assistant (AI) doesn't set format options yet.
+- Pools: in very short events (2 rounds) with many pairs, one pair can miss out while two play twice (QA R4-2). If an offline host moves on in a results-driven event while a player drops out on the server, that player stays in the host's remade rounds until the host's next recompute or check-in (QA R4-4).
 - The server can't tell a genuine recompute from a hand-made one that follows the rules above, so a player could arrange later rounds within those rules (QA N-3, accepted); the host's next change or "Next round" in a results-driven event remakes them.
 - Live sync is polling (8 s), not push. Two phones remaking the same provisional rounds at once end up with the last writer's version, which is regenerated anyway when the host moves on.
 

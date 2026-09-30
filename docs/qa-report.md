@@ -469,3 +469,82 @@ Suggested fixes, in order:
 3. **R3-3/R3-4:** in the merge, keep the host's own event-level changes and recompute after laying RSVPs, or show "undone" when local changes are dropped.
 
 R3-5 and R3-6 can follow. After these fixes, rerun `npm test`, `npm run test:qa`, `node --no-warnings test/qa/round3.qa.test.mjs` and `cd e2e && node qa/round3-qa.mjs`.
+
+---
+
+## Round 4: verification of `cfac9ce5`
+
+- **Build under test:** `cfac9ce5` ("Fix QA round 3 defects (R3-1 to R3-6)"). The web export was rebuilt from this commit.
+- **Date:** 2026-09-30
+- **Rules:** As before. No application code was changed; QA added only `test/qa/round4.qa.test.mjs`, `e2e/qa/round4-qa.mjs` and this section. Nothing was deployed, committed or pushed.
+
+### R4.1 Suites
+
+| Suite | Result |
+|---|---|
+| `npm test` (engine, standings, formats, playoffs, merge) | PASS: 84/84 |
+| `npm run test:qa` (formats 61, playoffs-series 16, server-rules 15, round2 24, round3 27) | PASS: 143/143 |
+| `backend-worker` `npm run test:parse` | PASS: 114/114 |
+| `backend` `npm test` | PASS: 41/41 |
+| Web export | PASS: "Web Bundled" |
+| e2e `rounds`, `formats`, `calendar`, `assistant` | PASS: 7/7, 12/12, 8/8, 18/18 |
+| e2e `qa/formats-qa`, `qa/round2-qa`, `qa/round3-qa` | PASS: 23/23, 11/11, 6/6 |
+| **New:** `test/qa/round4.qa.test.mjs` | 18 pass, **5 fail** (all minor, see R4.3) |
+| **New:** `e2e/qa/round4-qa.mjs` (saves through the real `enforceEventHosts`) | PASS: 10/10 |
+
+The round-3 QA scripts in `cfac9ce5` are unchanged from what QA wrote apart from being committed. They all pass now, and none of them was weakened.
+
+### R4.2 Round-3 items: status
+
+| Item | Status | Evidence |
+|---|---|---|
+| R3-1 leftover units never play | **Fixed** (residual R4-1, R4-2) | round3 matrix, 1,440 events, 0 failures. round4 matrix, 2,592 events (6 variants × 1–4 courts × 30–180 min × 4–26 players, ± churn): nobody plays 0 games while others play 2+ except one 2-round shape (R4-2). **Games per full-time player differ by at most 2 in every event.** No game repeats within a set; "extra" games are always across pools; no court is idle while a pool game could be played; every event generates in under 3 s. Set movement with pools of 5 moves the top 2 up and the bottom 2 down, and the middle stays. |
+| R3-2 RSVPs of others | **Fixed** | Server (round4 "RSVP permissions", 8 checks): a player changes only their own RSVP and no-show mark; they can't delete others' RSVPs, add one for a non-member, or clear someone's no-show; a signed-out save changes no RSVP; the host and hostless events can change anyone's; the host's Out with waitlist promotion and a player's own drop-out recompute are stored; "own + someone else's" keeps only the own change, and the rounds stay consistent. UI (`e2e/qa/round4-qa`): another player's In/Partial/Out and time pickers do nothing, with a positive control that the host's picker opens; your own row works; the host can edit every row; a hostless event can be edited by anyone; everything is locked once games start. e2e round3 "…taps Out for another player…" passes. |
+| R3-3 merge drops the host's own changes | **Fixed** | round3 lib checks, e2e round3 "host offline taps Next round…", round4 "host offline: Next round survives…". Also passing: a field deleted on either side stays deleted, and merging is stable (merging the result again changes nothing). |
+| R3-4 out but scheduled after merge | **Fixed** for the case where only the server remade the rounds; residual R4-4 when both sides did | round3 check passes |
+| R3-5 repeated refusals silent | **Fixed** | e2e round3; e2e round4 "three refused saves in a row…each end with the message showing" |
+| R3-6 history merge | **Fixed** | round3; round4 "history: both sides' additions are kept; our removals come off" |
+
+### R4.3 Remaining findings (all minor)
+
+**R4-1 (minor): Late arrivals can grow a pool past the documented 7.**
+- **Where:** `lib/engine.js:756`. Newcomers fewer than 4 go into the smallest pool with no cap.
+- **Steps:** round4 matrix (churn). For example, Pool play with 18 players on 1 court: round 0 has one pool of 7 pairs, then 2 late pairs make it 9. Singles groups with 8 or 10 players see the same.
+- **Doc:** PRD FR-2f (`docs/event-options.md:83`) says "up to 7".
+- **Impact:** A 9-unit pool has 36 games, so its set rarely ends. But courts stay full and games stay shared (the fairness checks pass). Fix the cap or the wording.
+
+**R4-2 (minor): In a 2-round event, an odd leftover unit can go without a game.**
+- **Where:** `lib/engine.js:781`. A cross-pool "extra" game needs *both* units to be owed a game (need ≥ 2).
+- **Steps:** round4 "nobody goes the whole event without a game…". Pool play with 22 players (11 pairs), 3 courts, 30 minutes (2 rounds): pools of 6 and 5. Round 2 gives 4 of the 5 sitters pool games, but the 5th (`p8+p9`) has no free pool partner and no owed opponent, so a court goes to `p0` v `p16` (their second game each). This repeats across all 4 Pool play variants. At 45 minutes the pair plays in round 3.
+
+**R4-3 (minor, low likelihood): A player's save without an `rsvps` field deletes that player's own RSVP.**
+- **Where:** `backend-worker/src/state.js:207` and `backend/state.js:202`: `else if (requester) delete rsvps[requester]`.
+- **Steps:** round4 "an older app build that sends an event without rsvps…".
+- **Impact:** The current app always sends `rsvps`, so only an odd or old client would trigger it. Keeping the stored entry when the field is absent would be safer.
+
+**R4-4 (minor): When both sides remade the rounds, the merge keeps ours, so a player who dropped out meanwhile stays scheduled.**
+- **Where:** `lib/merge.js:61`.
+- **Steps:** round4 "both sides remade the rounds…". The host is offline in a results-driven event and moves on (recompute), while a player drops out on the server (recompute). The merged state has that player's RSVP out and them still in round 2. The host's retried save is accepted.
+- **Impact:** It self-corrects on the host's next recompute or check-in, and it needs an offline host plus a simultaneous drop-out.
+
+**R4-5 (minor): `noShows` merges as a plain field (ours wins), so concurrent no-shows are lost.**
+- **Where:** `lib/merge.js:49`.
+- **Steps:** round4 "host offline marks p2 Not here while p9 RSVPs out on the server…". The merged `noShows` is `['p2']`, while the RSVPs say p2 and p9 are both out.
+- **Impact:** p9 shows as "unknown" rather than "out" in the host's check-in list. Scheduling is unaffected (it uses the RSVPs).
+
+**Observation (pre-existing, UI):** `Pill` (`lib/ui.js:108-121`) shows "disabled" only by dimming unselected pills. The selected pill of a row you can't change looks fully active, and the web build doesn't expose `aria-disabled`, so screen-reader and keyboard users aren't told the control is locked. This is the same treatment as the "games started" lock.
+
+### R4.4 Release verdict
+
+**Ready to release, with the minor items noted.** Everything the PRD requires is verified:
+- 84 unit checks, 143 QA checks, 114 worker checks and 41 backend checks pass;
+- 105 browser checks across 8 browser suites pass, 10 of them in `e2e/qa/round4-qa.mjs`;
+- all round-1 to round-3 defects are fixed or formally accepted (D-10, N-3).
+
+The 5 open findings (R4-1 to R4-5) are minor. Each needs an unusual combination: a 2-round event, late arrivals into an already-large pool, an offline host during a simultaneous drop-out, or a malformed client. None loses scores, breaks permissions, or crashes. I recommend tracking R4-1 (cap or document the pool size) and R4-3 (a one-line server guard) for the next patch.
+
+Rerun the round-4 checks with:
+```
+node --no-warnings test/qa/round4.qa.test.mjs
+cd e2e && node qa/round4-qa.mjs      # web export on :5055
+```

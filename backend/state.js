@@ -199,7 +199,7 @@ function enforceEventHosts(incoming, stored, requester, now = Date.now()) {
     // Only their own RSVP (and their own no-show mark).
     const rsvps = { ...(prev.rsvps || {}) };
     if (requester && ev.rsvps && requester in ev.rsvps) rsvps[requester] = ev.rsvps[requester];
-    else if (requester) delete rsvps[requester];
+    else if (requester && ev.rsvps) delete rsvps[requester]; // (a save without RSVPs leaves theirs alone)
     if ('rsvps' in prev || 'rsvps' in ev) kept.rsvps = rsvps;
     const noShows = (prev.noShows || []).filter(id => id !== requester);
     if (requester && (ev.noShows || []).includes(requester)) noShows.push(requester);
