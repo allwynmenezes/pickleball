@@ -27,6 +27,8 @@ export default function RoundNotifier() {
     const meId = meRef.current && meRef.current.id;
     const ev = getEventById(change.eventId);
     if (!meId || !ev || !(ev.memberIds || []).includes(meId) || ev.createdBy === meId) return;
+    // Only moving on is news — not the host stepping back a round.
+    if (!change.started && !change.playoffs && !change.forward) return;
     const text = describe(ev, change, meId);
     if (!text) return;
     setNote({ eventId: ev.id, title: ev.name, text });

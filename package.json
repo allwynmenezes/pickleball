@@ -7,7 +7,8 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "test": "node --no-warnings test/engine.test.mjs && node --no-warnings test/standings.test.mjs && node --no-warnings test/formats.test.mjs && node --no-warnings test/playoffs.test.mjs"
+    "test": "node --no-warnings test/engine.test.mjs && node --no-warnings test/standings.test.mjs && node --no-warnings test/formats.test.mjs && node --no-warnings test/playoffs.test.mjs",
+    "test:qa": "node --no-warnings test/qa/formats.qa.test.mjs && node --no-warnings test/qa/playoffs-series.qa.test.mjs && node --no-warnings test/qa/server-rules.qa.test.mjs"
   },
   "dependencies": {
     "@expo/metro-runtime": "~3.2.3",

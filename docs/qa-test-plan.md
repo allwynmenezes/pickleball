@@ -9,6 +9,7 @@ All commands run from the repo root (`C:\Code\The Pickle Slot`) with Git Bash. N
 | Suite | Command | Expect |
 |---|---|---|
 | Unit: engine, standings, formats, playoffs, series | `npm test` | four "all passed" |
+| QA regression suites (round 1) | `npm run test:qa` | three "all passed" |
 | Server rules + AI parsing | `cd backend-worker && npm run test:parse` | three "all passed" |
 | Node backend smoke | `cd backend && npm test` | "All smoke checks passed." |
 | Web build | `CI=1 npx expo export --platform web --output-dir e2e/web` | "Web Bundled" |

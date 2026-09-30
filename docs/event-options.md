@@ -1,6 +1,6 @@
 # Event formats — product requirements (PRD)
 
-Branch: `feature/event-options`. Status: implemented, awaiting QA.
+Branch: `feature/event-options`. Status: implemented; QA round 1 found 14 defects, all fixed or triaged (see `docs/qa-report.md`, section "Resolution").
 
 ## 1. Goal
 
@@ -78,13 +78,19 @@ Switching presets keeps the host's `pairs`, `seedOrder` and `playoffTeams`.
   - court 1's winners stay, and the other winners go up one court;
   - the bottom court's losers stay, and the other losers go down one court;
   - partners are split;
-  - an unscored game keeps its four on the same court.
-- (f) Groups: the same four share a court for 3 rounds, and each partners every other once. A new set starts after 3 rounds, or earlier if a member becomes unavailable.
-- (g) Movement per set: the top 2 of a group (by wins, then point difference) move up a group and the bottom 2 move down. A group with no results stays together.
-- (h) Fixed pairs stay together every round. Players without a pair are paired in RSVP order, and an odd player out sits.
+  - an unscored or tied game keeps its four on the same court, and nobody moves into it, so nobody jumps two courts.
+- (f) Groups: the same four share a court for 3 rounds, and each partners every other once.
+  - A group of 4 pairs or singles plays its 2 games side by side on 2 courts. When that would leave courts idle (for example on 1 or 3 courts), each group plays one after the other on 1 court over a 6-round set (`groupSet.len`).
+  - Each group tracks its own position in its set (`groupSet.ns`). A group that finishes, or loses a player, is re-formed from whoever is free.
+  - Late arrivals and players sitting out get a free court as soon as 4 of them can fill one.
+  - With movement per set, all groups stay in step, and a new set starts for everyone.
+  - Seeded groups open with 1&4 v 2&3.
+- (g) Movement per set: the top 2 of a group (by wins, then point difference) move up a group and the bottom 2 move down. A group with no results stays together, and nobody moves into it.
+- (h) Fixed pairs stay together every round. Players without a host-set pair keep the partner they last played with in the event; the rest are paired in RSVP order. An odd player out sits.
 - (i) Singles: 1 v 1, and capacity is 2 per court.
 - (j) With `extras: rotate`, everyone who RSVPs is confirmed. Sit-outs are shared, differing by at most 1, and nobody sits twice in a row when avoidable.
-- (k) Break segments produce rounds with no games and no sit-outs.
+  - With court groups, a group keeps its four for a whole set, so sitting out comes a set at a time. The fair share is measured in sets: nobody sits more than one set more than anyone else. This is by design (QA D-10).
+- (k) Break segments produce rounds with no games and no sit-outs, in every event (plain round robins included).
 - (l) A round decided by results not yet in is marked `provisional`.
 
 **FR-3 Results-driven rounds (store).**
@@ -94,14 +100,17 @@ Switching presets keeps the host's `pairs`, `seedOrder` and `playoffTeams`.
 
 **FR-4 Score entry and standings.**
 - The host can score any game; a player can score only their own. The server enforces both rules.
-- Scores carry `scoredAt`, and the server keeps the newer of two conflicting scores, for the host too.
+- The server stamps every accepted score (`scoredAt`, `scoredBy`); a phone's clock is never trusted.
+- With an edit, a phone sends `baseAt`: the stamp of the score it last saw for that game. The server takes the edit only if nobody else scored the game since, or if the last score was the same person's.
+- So an out-of-date copy, the host's included, never undoes a newer score.
+- A save that fails (offline, server error) is kept and retried by the sync loop, and nothing from the server replaces it until it goes through.
 - The standings table shows rank, W–L, Win % or Pts, and +/−, with the viewer's own row highlighted.
 
 **FR-5 Playoffs (`lib/playoffs.js`, Rounds step).**
 - The host starts playoffs with "Start playoffs" (with a confirmation). Rounds after the current one are dropped.
-- Seeds come from standings:
+- Seeds come from standings (with season seeding, from season standings among the players at this session):
   - singles: players in rank order;
-  - fixed pairs: pairs ranked by their best player;
+  - fixed pairs: pairs as they last played, ranked by their best player, with no player in two teams;
   - rotating partners: the top 2N players paired 1&2N, 2&2N−1, and so on.
 - The bracket size is the largest of 2/4/8 not above the requested size and the number of teams available.
 - Single elimination uses the standard bracket (1v8, 4v5, 2v7, 3v6), plus an optional 3rd-place match.
@@ -136,10 +145,12 @@ Switching presets keeps the host's `pairs`, `seedOrder` and `playoffTeams`.
 **FR-9 Server rules (`backend-worker/src/state.js`, mirrored in `backend/state.js`).**
 - The host-only fields now include `options`, `checkedIn`, `published`, `started`, `startedAt`, `currentRoundIndex`, `playoffs` and `seriesId`.
 - Non-host roster changes:
-  - rounds before the current one keep their stored version;
-  - scores change only on the player's own games, and only if newer;
-  - recomputed later rounds pass through.
-- Playoffs: a non-host can change only the scores of their own matches; teams are re-resolved on the server.
+  - rounds before the current one, and the current one once games have started, keep their stored games;
+  - later rounds may be remade, but only from the event's own players, with nobody twice and the same round times;
+  - remade games carry no score;
+  - the roster keeps its length;
+  - scores change only on the player's own existing games.
+- Playoffs: a non-host can change only the scores of their own matches, and not once a later match that depends on it has a score. Teams are re-resolved on the server.
 
 **FR-10 DUPR and check-in (step 1).**
 - A DUPR rating (2.000–8.000) is typed in on the Players tab (own rating) or in the host's member editor.
@@ -151,6 +162,7 @@ Switching presets keeps the host's `pairs`, `seedOrder` and `playoffTeams`.
 - Men's and women's court modes apply only to plain rotating events. In format events they play as open courts. Mixed is honoured when the four allow a mixed split.
 - Groups are 4 only (no groups of 5). Brackets are 2/4/8 teams with no byes. Double elimination has no bracket reset.
 - The event assistant (AI) doesn't set format options yet.
+- Any signed-in player can still change another player's RSVP (this predates this work).
 - Live sync is polling (8 s), not push. Two phones remaking the same provisional rounds at once end up with the last writer's version, which is regenerated anyway when the host moves on.
 
 ## 7. Where the code is

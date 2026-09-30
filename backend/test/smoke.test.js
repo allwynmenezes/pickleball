@@ -106,14 +106,20 @@ async function main() {
   const sample = { players, events: [event], chats, history, flagThreshold: 4, currentEventId: 'ev1' };
 
   res = await fetch(`${base}/api/state`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(sample) });
-  const putBody = await res.json();
+  // Scores come back stamped by the server (scoredAt/scoredBy — see
+  // mergeScore in state.js); the rest is exactly what was sent.
+  const unstamp = s => JSON.parse(JSON.stringify(s, (k, v) => (k === 'scoredAt' || k === 'scoredBy' ? undefined : v)));
+  const rawPut = await res.json();
+  const putBody = unstamp(rawPut);
   check('PUT accepts a realistic snapshot (players, RSVPs, roster+scores, booking, chats, history)', () => {
     assert.equal(res.status, 200);
     assert.deepEqual(putBody, { ...sample, players: withClaimed(players) });
+    const scoredCourt = rawPut.events[0].roster.flatMap(r => r.courts).find(c => c.scoreA != null);
+    assert.ok(!scoredCourt || scoredCourt.scoredAt > 0, 'scores are stamped');
   });
 
   res = await fetch(`${base}/api/state`);
-  body = await res.json();
+  body = unstamp(await res.json());
   check('GET after PUT returns exactly what was written', () => {
     assert.deepEqual(body, { ...sample, players: withClaimed(players) });
   });
