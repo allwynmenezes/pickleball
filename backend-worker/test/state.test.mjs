@@ -10,7 +10,7 @@ const check = (name, fn) => {
 const clone = x => JSON.parse(JSON.stringify(x));
 const court = (n, teamA, teamB, scoreA = null, scoreB = null) => ({ court: n, mode: 'open', teamA, teamB, scoreA, scoreB });
 const stored = {
-  id: 'e1', name: 'Tue', createdBy: 'host', published: true, started: true, currentRoundIndex: 1, memberIds: ['host', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'x'],
+  id: 'e1', name: 'Tue', createdBy: 'host', courts: 2, published: true, started: true, currentRoundIndex: 1, memberIds: ['host', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'x'],
   options: { standings: 'winPct' }, checkedIn: { a: true },
   roster: [
     { offset: 0, courts: [court(1, ['a', 'b'], ['c', 'd'], 11, 7), court(2, ['e', 'f'], ['g', 'h'], 11, 9)] },
@@ -41,8 +41,17 @@ check('…and can correct their own score in a played round', () => {
   assert.equal(out.roster[0].courts[0].scoreB, 8);
 });
 check('a recompute of later rounds (a player\'s RSVP change) still goes through', () => {
-  const out = save(ev => { ev.roster[2].courts[1] = court(2, ['c', 'x'], ['f', 'h']); }, 'e');
+  // e drops out; x (in) takes e's place.
+  const out = save(ev => { ev.rsvps = { e: { status: 'out' }, x: { status: 'in', start: 0, end: 60 } }; ev.roster[2].courts[1] = court(2, ['c', 'x'], ['f', 'h']); }, 'e');
   assert.deepEqual(out.roster[2].courts[1].teamA, ['c', 'x']);
+});
+check("…but a stale copy saved without the player's own change keeps the stored rounds", () => {
+  const out = save(ev => { ev.rsvps = { x: { status: 'in', start: 0, end: 60 } }; ev.roster[2].courts[1] = court(2, ['c', 'x'], ['f', 'h']); }, 'e');
+  assert.deepEqual(out.roster[2].courts[1].teamA, ['c', 'e']);
+});
+check("…and a remake can't drop someone who is still coming", () => {
+  const out = save(ev => { ev.rsvps = { e: { status: 'out' }, x: { status: 'in', start: 0, end: 60 }, h: { status: 'in', start: 0, end: 60 } }; ev.roster[2].courts[1] = court(2, ['c', 'x'], ['f', 'e']); }, 'e');
+  assert.deepEqual(out.roster[2].courts[1].teamB, ['f', 'h']);
 });
 check('running the day and options are host-only', () => {
   const out = save(ev => { ev.currentRoundIndex = 2; ev.started = false; ev.published = false; ev.options = { standings: 'off' }; ev.checkedIn = {}; }, 'a');
@@ -117,8 +126,8 @@ check('…later rounds: strangers, duplicates and deletions are refused', () => 
   assert.equal(cut.roster.length, 3);
 });
 check('…and a remade later game carries no score', () => {
-  const out = save(ev => { ev.roster[2].courts[1] = { ...court(2, ['c', 'h'], ['f', 'e']), scoreA: 11, scoreB: 0 }; }, 'e');
-  assert.deepEqual([out.roster[2].courts[1].teamA, out.roster[2].courts[1].scoreA], [['c', 'h'], null]);
+  const out = save(ev => { ev.rsvps = { e: { status: 'out' }, x: { status: 'in', start: 0, end: 60 } }; ev.roster[2].courts[1] = { ...court(2, ['c', 'x'], ['f', 'h']), scoreA: 11, scoreB: 0 }; }, 'e');
+  assert.deepEqual([out.roster[2].courts[1].teamA, out.roster[2].courts[1].scoreA], [['c', 'x'], null]);
 });
 
 console.log('playoffs');

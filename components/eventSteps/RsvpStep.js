@@ -84,7 +84,7 @@ export default function RsvpStep({ ev }) {
         </Hint>
       </Card>
 
-      <SectionTitle>Responses (capacity: {ev.courts * 4})</SectionTitle>
+      <SectionTitle>Responses (capacity: {playerCapacity(ev) === Infinity ? 'no limit' : playerCapacity(ev)})</SectionTitle>
       <Card>
         {members.map(p => {
           const r = ev.rsvps[p.id];

@@ -3,7 +3,7 @@ import { View, Text, Pressable, StyleSheet, Vibration, Platform } from 'react-na
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { onRoundChange, getEventById, playerName, courtLabel } from '../lib/store';
+import { onRoundChange, getEventById, playerName, courtLabel, onSyncProblem, getSyncProblem } from '../lib/store';
 import { useAuth } from '../lib/auth';
 import { pushOnce } from '../lib/nav';
 import { colors, radius } from '../lib/theme';
@@ -59,6 +59,29 @@ export default function RoundNotifier() {
   );
 }
 
+/* A strip at the bottom while changes aren't reaching the server: kept and
+   retried (offline, server trouble), or refused and undone. */
+export function SyncStatus() {
+  const insets = useSafeAreaInsets();
+  const [problem, setProblem] = useState(getSyncProblem());
+  const [shownRejected, setShownRejected] = useState(false);
+  useEffect(() => onSyncProblem(p => { setProblem(p); if (p === 'rejected') setShownRejected(true); }), []);
+  useEffect(() => {
+    if (!shownRejected) return undefined;
+    const t = setTimeout(() => setShownRejected(false), 8000);
+    return () => clearTimeout(t);
+  }, [shownRejected]);
+  const text = problem === 'retrying' ? 'Not saved yet — no connection to the server. Retrying…'
+    : problem === 'rejected' && shownRejected ? "A change couldn't be saved and was undone." : null;
+  if (!text) return null;
+  return (
+    <View style={[styles.sync, { bottom: insets.bottom + 72 }]} pointerEvents="none" accessibilityLiveRegion="polite">
+      <Ionicons name={problem === 'retrying' ? 'cloud-offline-outline' : 'alert-circle-outline'} size={16} color="#fff" />
+      <Text style={styles.syncText}>{text}</Text>
+    </View>
+  );
+}
+
 function describe(ev, change, meId) {
   if (change.playoffs) {
     const m = (ev.playoffs && ev.playoffs.matches || []).find(x => [...(x.teamA || []), ...(x.teamB || [])].includes(meId));
@@ -84,4 +107,6 @@ const styles = StyleSheet.create({
   },
   title: { color: colors.courtTint, fontWeight: '700', fontSize: 13 },
   text: { color: '#fff', fontSize: 13.5, marginTop: 2 },
+  sync: { position: 'absolute', left: 16, right: 16, flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10, borderRadius: radius.md, backgroundColor: colors.clayDeep, zIndex: 40 },
+  syncText: { color: '#fff', fontSize: 13, flex: 1 },
 });

@@ -8,7 +8,7 @@ import { hydrate, isHydrated, startLiveSync } from '../lib/store';
 import { hydrateAuth } from '../lib/auth';
 import { ConfirmModalHost } from '../lib/ui';
 import AppHeader from '../components/AppHeader';
-import RoundNotifier from '../components/RoundNotifier';
+import RoundNotifier, { SyncStatus } from '../components/RoundNotifier';
 import { colors } from '../lib/theme';
 
 export default function RootLayout() {
@@ -53,6 +53,7 @@ export default function RootLayout() {
           </View>
         ) : stack}
         <RoundNotifier />
+        <SyncStatus />
         <ConfirmModalHost />
       </SafeAreaProvider>
     </GestureHandlerRootView>

@@ -72,25 +72,52 @@ function mergeHostRoster(prevRoster, incomingRoster, requester, now) {
    once games have started, stay exactly as stored. Later rounds may be
    remade (a player's RSVP change, or a score in an event whose next rounds
    depend on results, does that) — but only into rounds made of the event's
-   own players, nobody twice, at the same times, and with no scores on new
-   games. Scores change only on the player's own games. The roster keeps
+   own players on real courts, nobody twice, nobody added or dropped unless
+   their RSVP says so, at the same times, and with no scores on new games. Scores change only on the player's own games. The roster keeps
    its length; there's no roster to make before the host makes one. */
-function mergeRosterForPlayer(prev, incomingRoster, requester, now) {
+function mergeRosterForPlayer(prev, ev, requester, now) {
   const prevRoster = prev.roster;
   if (!Array.isArray(prevRoster)) return prevRoster;
-  const incoming = Array.isArray(incomingRoster) ? incomingRoster : [];
+  const incoming = Array.isArray(ev.roster) ? ev.roster : [];
   const currentIdx = prev.currentRoundIndex || 0;
   const frozenTo = prev.started ? currentIdx : currentIdx - 1; // rounds up to this index keep their games
   const members = new Set([...(prev.memberIds || []), ...Object.keys(prev.rsvps || {})]);
+  /* Later rounds are only remade by a save that explains it: the player's
+     own RSVP change, or — where results decide the rounds — their own
+     score. Anything else (say, an out-of-date copy saved along with a chat
+     message) keeps the rounds as stored. */
+  const rsvpOf = (e, id) => JSON.stringify(((e && e.rsvps) || {})[id] || null);
+  const ownRsvpChanged = !!requester && rsvpOf(prev, requester) !== rsvpOf(ev, requester);
+  const o = prev.options || {};
+  const driven = !!o.reseed || (!!o.movement && o.movement !== 'none');
+  const ownScoreChanged = driven && !!requester && prevRoster.some((p, i) => (p.courts || []).some(c => {
+    if (!plays(c, requester)) return false;
+    const a = incoming[i] && Array.isArray(incoming[i].courts) ? incoming[i].courts.find(x => x.court === c.court) : null;
+    return !!a && sameTeams(a, c) && (a.scoreA !== c.scoreA || a.scoreB !== c.scoreB);
+  }));
+  const mayRemake = ownRsvpChanged || ownScoreChanged;
+  const rsvps = (ev && ev.rsvps) || {};
+  const available = (id, r) => {
+    const x = rsvps[id];
+    return !!x && (x.status === 'in' || x.status === 'partial') && r.offset >= (x.start || 0) && (x.end == null || r.offset < x.end);
+  };
+  const everyone = r => [...(r.courts || []).flatMap(c => [...(c.teamA || []), ...(c.teamB || [])]), ...(r.sitOut || [])];
   const validRound = (r, p) => {
     if (!r || !Array.isArray(r.courts) || r.offset !== p.offset) return false;
-    const ids = [...r.courts.flatMap(c => [...(c.teamA || []), ...(c.teamB || [])]), ...(r.sitOut || [])];
-    return ids.every(id => members.has(id)) && new Set(ids).size === ids.length
-      && r.courts.every(c => Array.isArray(c.teamA) && Array.isArray(c.teamB) && c.teamA.length === c.teamB.length && c.teamA.length >= 1 && c.teamA.length <= 2);
+    const nums = r.courts.map(c => c.court);
+    if (!nums.every(n => Number.isInteger(n) && n >= 1 && n <= (prev.courts || 0)) || new Set(nums).size !== nums.length) return false;
+    if (!r.courts.every(c => Array.isArray(c.teamA) && Array.isArray(c.teamB) && c.teamA.length === c.teamB.length && c.teamA.length >= 1 && c.teamA.length <= 2)) return false;
+    const ids = everyone(r);
+    if (!ids.every(id => members.has(id)) || new Set(ids).size !== ids.length) return false;
+    // Nobody leaves or joins a round unless their RSVP says so.
+    const had = new Set(everyone(p)), has = new Set(ids);
+    for (const id of had) if (!has.has(id) && available(id, r)) return false;
+    for (const id of has) if (!had.has(id) && !available(id, r)) return false;
+    return true;
   };
   return prevRoster.map((p, i) => {
     const inc = incoming[i];
-    const base = i > frozenTo && validRound(inc, p) ? inc : p;
+    const base = mayRemake && i > frozenTo && validRound(inc, p) ? inc : p;
     return {
       ...base,
       courts: (base.courts || []).map(c => {
@@ -174,7 +201,7 @@ export function enforceEventHosts(incoming, stored, requester, now = Date.now())
     }
     const kept = { ...ev };
     HOST_ONLY_FIELDS.forEach(f => { if (f in prev) kept[f] = prev[f]; else delete kept[f]; });
-    if ('roster' in ev || 'roster' in prev) kept.roster = mergeRosterForPlayer(prev, ev.roster, requester, now);
+    if ('roster' in ev || 'roster' in prev) kept.roster = mergeRosterForPlayer(prev, ev, requester, now);
     if ('playoffs' in prev) kept.playoffs = mergePlayoffs(prev.playoffs, ev.playoffs, requester, false, now);
     return kept;
   });

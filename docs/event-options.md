@@ -47,7 +47,7 @@ Consistency rules (`normalizeOptions`, `lib/formats.js`):
 | Cream of the Crop | groups + movement per set + DUPR seeding |
 | Shuffle | fixed pairs + win % |
 | Rumble | fixed pairs + re-seed |
-| Pool play + playoffs | fixed pairs + groups + single-elimination playoffs (4 teams) |
+| Pool play + playoffs | fixed pairs + groups (pools) + single-elimination playoffs + extras rotate |
 | Singles round robin | singles + win % |
 | League night | weekly series + win % |
 | Ladder | ladder series + movement per game + court points + extras rotate |
@@ -80,8 +80,8 @@ Switching presets keeps the host's `pairs`, `seedOrder` and `playoffTeams`.
   - partners are split;
   - an unscored or tied game keeps its four on the same court, and nobody moves into it, so nobody jumps two courts.
 - (f) Groups: the same four share a court for 3 rounds, and each partners every other once.
-  - A group of 4 pairs or singles plays its 2 games side by side on 2 courts. When that would leave courts idle (for example on 1 or 3 courts), each group plays one after the other on 1 court over a 6-round set (`groupSet.len`).
-  - Each group tracks its own position in its set (`groupSet.ns`). A group that finishes, or loses a player, is re-formed from whoever is free.
+  - Pairs and singles play in **pools** of 4: each pool has 6 games (everyone once). Every round, the courts are filled with games still to be played, and whoever has sat out most goes first; a unit plays at most one game a round. So no court is idle while a game could be played, and everyone gets games even when the event is too short for every pool to finish. A set ends when every pool has played its games. Late arrivals form a new pool once there are 4.
+  - Each group of players tracks its own position in its set (`groupSet.ns`) and keeps its court (`groupSet.gc`) until the set ends. A group that finishes, or loses a player, is re-formed from whoever is free.
   - Late arrivals and players sitting out get a free court as soon as 4 of them can fill one.
   - With movement per set, all groups stay in step, and a new set starts for everyone.
   - Seeded groups open with 1&4 v 2&3.
@@ -103,7 +103,7 @@ Switching presets keeps the host's `pairs`, `seedOrder` and `playoffTeams`.
 - The server stamps every accepted score (`scoredAt`, `scoredBy`); a phone's clock is never trusted.
 - With an edit, a phone sends `baseAt`: the stamp of the score it last saw for that game. The server takes the edit only if nobody else scored the game since, or if the last score was the same person's.
 - So an out-of-date copy, the host's included, never undoes a newer score.
-- A save that fails (offline, server error) is kept and retried by the sync loop, and nothing from the server replaces it until it goes through.
+- A save that fails (offline, server error) is kept and retried by the sync loop, and nothing from the server replaces it until it goes through. A strip at the bottom says "Not saved yet… Retrying". While a save keeps failing, polls still bring in others' changes: they are merged with this phone's unsaved ones (`lib/merge.js`: our scores on the same games, our RSVPs and chat messages are kept on top of the server's copy), and the save is retried with the result. A save the server refuses outright (4xx) is dropped, the server's copy is loaded, and the strip says the change was undone.
 - The standings table shows rank, W–L, Win % or Pts, and +/−, with the viewer's own row highlighted.
 
 **FR-5 Playoffs (`lib/playoffs.js`, Rounds step).**
@@ -146,7 +146,8 @@ Switching presets keeps the host's `pairs`, `seedOrder` and `playoffTeams`.
 - The host-only fields now include `options`, `checkedIn`, `published`, `started`, `startedAt`, `currentRoundIndex`, `playoffs` and `seriesId`.
 - Non-host roster changes:
   - rounds before the current one, and the current one once games have started, keep their stored games;
-  - later rounds may be remade, but only from the event's own players, with nobody twice and the same round times;
+  - later rounds may be remade only by a save that explains it (the player's own RSVP change, or their own score where results decide the rounds). A stale copy saved along with anything else keeps the stored rounds;
+  - a remade round uses only the event's own players on real courts (1..courts), with nobody twice, at the same times, and nobody added or dropped unless their RSVP says so;
   - remade games carry no score;
   - the roster keeps its length;
   - scores change only on the player's own existing games.
@@ -162,7 +163,7 @@ Switching presets keeps the host's `pairs`, `seedOrder` and `playoffTeams`.
 - Men's and women's court modes apply only to plain rotating events. In format events they play as open courts. Mixed is honoured when the four allow a mixed split.
 - Groups are 4 only (no groups of 5). Brackets are 2/4/8 teams with no byes. Double elimination has no bracket reset.
 - The event assistant (AI) doesn't set format options yet.
-- Any signed-in player can still change another player's RSVP (this predates this work).
+- Any signed-in player can still change another player's RSVP (this predates this work). The server can't tell a genuine recompute from a hand-made one that follows the rules above, so a player could arrange later rounds within those rules (QA N-3, accepted); the host's next change or "Next round" in a results-driven event remakes them.
 - Live sync is polling (8 s), not push. Two phones remaking the same provisional rounds at once end up with the last writer's version, which is regenerated anyway when the host moves on.
 
 ## 7. Where the code is

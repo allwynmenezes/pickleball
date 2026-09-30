@@ -93,7 +93,7 @@ export default function RoundsStep({ ev, canEdit, meId }) {
                 <Btn title="Next round" icon="chevron-forward" variant="ghost" small disabled={idx >= ev.roster.length - 1} onPress={() => advanceRound(ev, 1)} />
               </View>
             ) : null}
-            {round.groupSet ? <Text style={styles.note}>Groups{new Set(round.groupSet.ns || [round.groupSet.n]).size === 1 ? ` · game ${round.groupSet.n + 1} of ${round.groupSet.len || 3}` : ' · each group plays every combination'}</Text> : null}
+            {round.groupSet && round.groupSet.pools ? <Text style={styles.note}>Pools · round {round.groupSet.n + 1} of this set</Text> : round.groupSet ? <Text style={styles.note}>Groups{new Set(round.groupSet.ns || [round.groupSet.n]).size === 1 ? ` · game ${round.groupSet.n + 1} of ${round.groupSet.len || 3}` : ' · each group plays every combination'}</Text> : null}
             {round.courts.length === 0 ? <Hint style={{ marginTop: 0 }}>Break — no games this round.</Hint> : null}
             {round.courts.map(c => (
               <CourtLine key={c.court} ev={ev} court={c} roundIdx={idx} editable={canScore(c)} onScoreChange={(...args) => setScore(ev, ...args)} />

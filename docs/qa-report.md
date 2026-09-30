@@ -218,3 +218,141 @@ node --no-warnings test/qa/server-rules.qa.test.mjs
 cd e2e && node qa/formats-qa.mjs     # needs the web export served on :5055
 ```
 Each script exits non-zero while its defects are open. The failing checks are named in §3.
+
+---
+
+## Round 2: verification of `18760cd4`
+
+- **Build under test:** `18760cd4` ("Fix QA round 1 defects (D-1 to D-14)"). The web export was rebuilt from this commit before the browser runs.
+- **Date:** 2026-09-30
+- **Rules:** As in round 1. No application code was changed; QA added only `test/qa/round2.qa.test.mjs`, `e2e/qa/round2-qa.mjs` and this section. Nothing was deployed, committed or pushed.
+
+### R2.1 Suites
+
+| Suite | Result |
+|---|---|
+| `npm test` (engine, standings, formats, playoffs) | PASS: 77/77 |
+| `npm run test:qa` (QA round 1 suites, as updated in 18760cd4) | PASS: 92/92 (formats 61, playoffs-series 16, server-rules 15) |
+| `backend-worker` `npm run test:parse` | PASS: 111/111 |
+| `backend` `npm test` | PASS: 41/41, "All smoke checks passed." |
+| Web export | PASS: "Web Bundled" |
+| e2e `rounds.mjs`, `formats.mjs`, `calendar.mjs`, `assistant.mjs` | PASS: 7/7, 12/12, 8/8, 18/18 |
+| e2e `qa/formats-qa.mjs` | PASS: 23/23 |
+| **New:** `test/qa/round2.qa.test.mjs` | 17 pass, **7 fail** |
+| **New:** `e2e/qa/round2-qa.mjs`, with PUTs routed through the real `enforceEventHosts` | 9 pass, **2 fail** |
+
+The new scripts are regression checks for the round-1 fixes:
+- **Legitimate flows run through the new server merge:**
+  - a player's RSVP Out or partial before games start (in the browser too);
+  - a player scoring their own King of the Court game with the remade later rounds;
+  - typing "1" then "11" before the reply;
+  - a host correction beating a player's score, with the player's stale copy then unable to undo it;
+  - every host flow;
+  - playoff scoring by a player, and a host's stale copy.
+- **Adversarial non-host saves.**
+- **Groups:** staggered groups, narrow (6-round) sets with and without `movement: 'set'`, Pool play court use, and a matrix with late arrivals and early leavers.
+- **Client:** save retry and round alerts.
+
+### R2.2 Review of the QA test edits made in 18760cd4
+
+| Edit | Verdict |
+|---|---|
+| server-rules "older host copy": stale copy sends `baseAt: 0` | **Fair.** A stale host copy never saw the player's server stamp. |
+| Mirror check's function list (`mergeScore`, `mergeHostRoster`, …) | **Fair.** The check still compares every rule function and `HOST_ONLY_FIELDS`, and it passes. |
+| `groupProblems` rewritten for per-group counters (`ns`, `len`) | **Fair, but weaker.** It no longer checks that a group stays on its court during its set. QA re-added that check in round 2, and it finds N-4. |
+| "a new set starts early" now allows the intact group to finish its set | **Fair.** This matches the per-group model in the updated FR-2f. |
+| Season test pointed at `seasonStandingsFor` | **Fair.** `lib/store.js` `playoffRows` uses it. |
+| D-10 check changed to "spread ≤ 3" | **Accepted for 3-round sets** (Scramble, Double Header). **Challenged for 6-round narrow sets.** The threshold is hard-coded to 3 and the matrix doesn't cover them, yet there one set means 6 rounds: in a 60-minute Pool play on 1 court, half the pairs never play (N-5). The fair-share rule should be tested per `groupSet.len`, and a set shouldn't be longer than the event allows everyone to play. |
+
+### R2.3 Round-1 defects: status
+
+| Defect | Status | Evidence |
+|---|---|---|
+| D-1 non-host roster rewrite | **Fixed as specified**, with residual gaps N-1, N-2, N-3 and N-7 | The round in play is frozen once started. Other people's scores, swapped teams and deleted rounds are all rejected (server-rules and round2 "once started…"). A legitimate RSVP drop-out and a results-driven recompute are accepted (round2 and e2e round2). |
+| D-2 server playoff lock | **Fixed** | server-rules "…once the final has a score (FR-5 lock)" |
+| D-3 client clock trusted | **Fixed** | Stamps are the server's (`scoredAt`, `scoredBy`), and a future `baseAt` can't block the host (server-rules; round2 "host correction…"). `baseAt` is not stored. |
+| D-4 player in two playoff teams | **Fixed** | playoffs-series; e2e qa "Start playoffs never puts a player in two teams" |
+| D-5 season seeding picks absent players | **Fixed** | playoffs-series (through `seasonStandingsFor`) |
+| D-6 failed save wiped by poll | **Fixed** for transient failures, with residual N-6 | e2e qa "…server 500…" passes; e2e round2 "a save that fails twice is retried…and reaches the server" |
+| D-7 day-of pairs re-formed | **Fixed** | formats.qa "fixed pairs: players paired on the day stay paired…" |
+| D-8 Pool play idle or unusable courts | **Partially fixed** | 1 court now schedules games, and 2 and 3 courts give everyone a game at 16 or 24 players. But with 16 players on 3 courts, court 3 is still idle every round while 8 players sit (round2 "no court sits idle…"). This contradicts updated FR-2f ("when that would leave courts idle, for example on 1 or 3 courts"). Also see N-5. |
+| D-9 movement into unscored courts | **Fixed** | formats.qa QA 3 (unscored top and middle courts, tie, at most one court's move) and set movement |
+| D-10 group sit-out spread | **Accepted** (by design, PRD FR-2j) for 3-round sets | See R2.2 and N-5 for 6-round sets. |
+| D-11 late arrivals wait a set | **Fixed**, with regression N-4 | formats.qa "a late arrival…" |
+| D-12 seeded group opening split | **Fixed** | formats.qa "Double Header: 1&4 v 2&3" |
+| D-13 preset resets `playoffTeams` | **Fixed** | formats.qa. The Pool play preset now also sets `extras: rotate`, but the PRD §4 table (`docs/event-options.md:50`) doesn't list it. |
+| D-14 break-round sit-outs | **Fixed** | formats.qa "popcorn: a break segment…". This deliberately differs from the pre-branch engine for all-break rounds only; the FR-2a comparison still passes. |
+| O-2 alerts on stepping back | **Fixed** | e2e round2 "the host stepping back a round gives no alert; moving forward does" |
+| O-1, O-3 | Unchanged | |
+
+### R2.4 New defects and residual gaps
+
+**N-1 (major): A non-host can remove other players from every later round.**
+- **Where:** `backend-worker/src/state.js:85-93` and `backend/state.js:80-88`. `validRound` checks that every id is a member and appears once, but not that the round's pool is still accounted for (on court or sitting out).
+- **Steps:** round2 "a player can't drop other players from later rounds". In a started event, a player sends rounds 3–4 without `p11`, who is in neither the games nor `sitOut`.
+- **Expected:** Rejected. FR-9 says "recomputed later rounds pass through", and a recompute never loses an available player.
+- **Actual:** Stored. `p11` has no game for the rest of the event, and the host's phone adopts this on its next poll.
+- **Suggestion:** Require that each accepted round's players equal the stored round's players, apart from the requester's own RSVP change.
+
+**N-2 (minor): Court numbers aren't validated in non-host rounds.**
+- **Where:** Same function (`validRound`).
+- **Steps:** round2 "a player can't put two games on the same court…". Two games on court 1 and one on court 9 are stored.
+- **Expected:** Court numbers are unique and between 1 and `ev.courts`.
+- **Actual:** Accepted. Round alerts and the Rounds step then show impossible courts.
+
+**N-3 (minor, a risk accepted by the PRD but broader than stated): The server can't tell a recompute from hand-made later rounds.**
+- **Where:** `backend-worker/src/state.js:93`.
+- **Steps:** round2 "a player can't rewrite later rounds…". With no RSVP change and no results-driven options, a player puts themselves with the two best players on court 1 for every later round. It is stored.
+- **Suggestion:** Accept later rounds from a non-host only when the event is results-driven, or when the requester's own RSVP changed in the same save.
+
+**N-4 (minor): With staggered groups, a group moves courts mid-set.**
+- **Where:** `lib/engine.js:736` and `:766-771`. Entries are re-indexed, so a continuing group takes `courts[gi]` by its new position.
+- **Steps:** round2 "staggered groups…". Scramble with 12 players on 3 courts, where 4 players arrive for round 2:
+  - round 3: group p8–p11 moves from court 3 to court 1;
+  - round 4: group p0, p1, p4, p5 moves from court 2 to court 1.
+- **Expected:** FR-2f: "the same four share a court for 3 rounds".
+- **Actual:** The four stay together but switch courts mid-set, which is confusing on the day.
+
+**N-5 (major): Narrow 6-round sets can leave half the players with no games.**
+- **Where:** `lib/engine.js:716-719`. `setLen = 6` applies regardless of how many rounds the event has, and nobody is rotated in during a set.
+- **Steps:** round2 "Pool play, 16 players / 1 court / 60 min…". With 4 rounds, `p8`–`p15` play 0 games while `p0`–`p7` play 2 each (Pool play now defaults to `extras: rotate`, so all 16 are confirmed).
+- **Expected:** FR-2j: sit-outs are shared ("everyone who RSVPs … sitting out in turns").
+- **Actual:** Half the field never plays. 2 and 3 courts are fine at 16 or 24 players.
+
+**N-6 (minor): A failing save gives no visible sign, and it pauses live sync for as long as it fails.**
+- **Where:** `lib/store.js:71` and `:118`. `unsaved` only makes `applyRemote` retry the save and return; there is no UI for it.
+- **Steps (e2e round2):**
+  - "the app tells the user…": with saves failing, no "not saved / offline / retrying" text appears.
+  - "while a player's save keeps failing…": `GET` works, `PUT` returns 503, and the host moves to round 2. After 20 s the player's phone is still on round 1.
+- **Expected:** FR-8 says the user sees the host's round changes. An unsaved change should be flagged.
+- **Actual:** This is correct while fully offline (the `GET` fails too). But with a persistent `PUT` rejection (for example a 400 or 413), the phone stops syncing silently until the app restarts.
+
+**N-7 (major, pre-existing but widened by D-1's fix): A player's stale copy reverts the host's re-made rounds.**
+- **Where:** `backend-worker/src/state.js:83` and `:93`. Before games start, `frozenTo = currentIdx - 1`, so the player's copy of every round is accepted if it is well-formed.
+- **Steps:** round2 "a player's stale copy…doesn't revert the host's rounds". The host switches seeding to DUPR and the rounds are re-made and stored. Within one poll interval, a player's phone saves anything with its older copy.
+- **Expected:** The host's rounds stand; the player's save changes only the player's own data.
+- **Actual:** The rounds revert to the old, unseeded ones, while `options` stay as the host set them. The roster no longer matches the format, and the host gets no sign of it.
+- **Suggestion:** Base the check on a roster version, or accept a non-host roster only when it changes because of that requester's own RSVP or score.
+
+**N-8 (minor, UI):** The RSVP step heading "Responses (capacity: courts × 4)" (`components/eventSteps/RsvpStep.js:87`) is wrong for singles (it should be courts × 2) and for `extras: rotate` (there is no limit). The timeline above it (`:36`) is already correct.
+
+**Doc:** `docs/event-options.md:50` (the PRD §4 Pool play row) doesn't mention the new `extras: rotate`.
+
+### R2.5 Summary
+
+| | Count |
+|---|---|
+| Round-1 defects fixed with nothing left open | 9: D-2, D-3, D-4, D-5, D-7, D-9, D-12, D-13, D-14 |
+| Fixed with residual gaps or a regression | 3: D-1 (N-1, N-2, N-3, N-7), D-6 (N-6), D-11 (N-4) |
+| Partially fixed | D-8 (idle court on 3 courts; see also N-5) |
+| Accepted | D-10 (for 3-round sets) |
+| New defects | 8: N-1, N-5 and N-7 major; N-2, N-3, N-4, N-6 and N-8 minor |
+| Regressions in existing suites | None. All 304 original checks and 92 round-1 QA checks pass. |
+
+Recommendation: fix N-1, N-5 and N-7 before release, because they let a player or a stale phone take games away from others without anyone noticing. The rest can follow.
+
+Rerun the round-2 checks with:
+```
+node --no-warnings test/qa/round2.qa.test.mjs
+cd e2e && node qa/round2-qa.mjs      # web export on :5055
+```

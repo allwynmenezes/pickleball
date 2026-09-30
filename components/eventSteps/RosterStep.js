@@ -111,7 +111,7 @@ export default function RosterStep({ ev }) {
               idx === (ev.currentRoundIndex || 0) && ev.published && styles.roundCurrent,
               ev.published && idx < (ev.currentRoundIndex || 0) && styles.roundPlayed,
             ]}>
-              <Text style={styles.roundHead}>{idx === 0 ? 'Warm-up · ' : ''}{fmtClock(offsetToClock(ev, r.offset))}{r.repeatsWarmup ? <Text style={styles.roundNote}> · same players as warm-up</Text> : null}{r.groupSet ? <Text style={styles.roundNote}> · groups{new Set(r.groupSet.ns || [r.groupSet.n]).size === 1 ? `, game ${r.groupSet.n + 1} of ${r.groupSet.len || 3}` : ''}</Text> : null}{r.provisional ? <Text style={styles.roundNote}> · provisional</Text> : null}</Text>
+              <Text style={styles.roundHead}>{idx === 0 ? 'Warm-up · ' : ''}{fmtClock(offsetToClock(ev, r.offset))}{r.repeatsWarmup ? <Text style={styles.roundNote}> · same players as warm-up</Text> : null}{r.groupSet && r.groupSet.pools ? <Text style={styles.roundNote}> · pools</Text> : r.groupSet ? <Text style={styles.roundNote}> · groups{new Set(r.groupSet.ns || [r.groupSet.n]).size === 1 ? `, game ${r.groupSet.n + 1} of ${r.groupSet.len || 3}` : ''}</Text> : null}{r.provisional ? <Text style={styles.roundNote}> · provisional</Text> : null}</Text>
               {r.courts.map(c => <MatchupRow key={c.court} ev={ev} court={c} offset={r.offset} />)}
               {r.sitOut && r.sitOut.length ? <Hint>Left over this round: {r.sitOut.map(id => playerNameGender(id)).join(', ')}</Hint> : null}
             </View>
