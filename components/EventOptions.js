@@ -43,10 +43,11 @@ export function EventOptionsEditor({ ev }) {
       <Card style={styles.stack}>
         <Select
           label="Format" value={o.format === 'custom' ? 'custom' : (fmt ? fmt.key : 'popcorn')}
-          onValueChange={(v) => { if (v !== 'custom') applyFormat(ev, v); }}
-          items={[...FORMATS.map(f => ({ label: f.label, value: f.key })), ...(o.format === 'custom' ? [{ label: 'Custom', value: 'custom' }] : [])]}
+          // Custom keeps the current options and lets you set each one below.
+          onValueChange={(v) => { if (v === 'custom') setEventOption(ev, 'format', 'custom'); else applyFormat(ev, v); }}
+          items={[...FORMATS.map(f => ({ label: f.label, value: f.key })), { label: 'Custom', value: 'custom' }]}
         />
-        <Hint style={styles.hint}>{fmt ? fmt.blurb : 'Your own mix of the options below.'} Picking a format fills in the options below; change any of them to fine-tune.</Hint>
+        <Hint style={styles.hint}>{fmt ? fmt.blurb : 'Your own mix of the options below.'} Picking a format fills in the options below; change any of them, or pick Custom, to set your own.</Hint>
 
         <Select label="Games" value={o.games} onValueChange={set('games')} items={items(GAMES_MODES)} />
         {noGames ? <Hint style={styles.hint}>Players RSVP as usual; there's no roster or rounds. Publish the event from the summary.</Hint> : (
