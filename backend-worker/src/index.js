@@ -5,7 +5,8 @@
      GET/PUT /api/state                          shared group state
      /api/players/:id/claim-link, /api/claim/:t  invites
      /api/auth/...                               sign up, login, passwords
-     POST /api/ai/parse-event                    describe an event → draft (ai.js)
+     /api/me/social, /api/friends/:id            friends, visible in search (social.js)
+     POST /api/ai/parse-event                   describe an event → draft (ai.js)
      POST /api/ai/transcribe                     voice note → text (ai.js)
      POST /api/ai/edit-event                     change an event by message (aiEdit.js)
      POST /api/admin/import                      one-time data move
@@ -18,6 +19,7 @@ import {
 } from './auth.js';
 import { parseEvent, transcribe } from './ai.js';
 import { editEvent } from './aiEdit.js';
+import { getSocial, putSocial, addFriend, removeFriend } from './social.js';
 
 const ROUTES = [
   ['GET', '/api/health', () => json({ ok: true })],
@@ -32,6 +34,10 @@ const ROUTES = [
   ['POST', '/api/auth/password/reset', resetPassword],
   ['GET', '/api/auth/me', me],
   ['POST', '/api/auth/logout', logout],
+  ['GET', '/api/me/social', getSocial],
+  ['PUT', '/api/me/social', putSocial],
+  ['POST', '/api/friends/:id', addFriend],
+  ['POST', '/api/friends/:id/remove', removeFriend],
   ['POST', '/api/ai/parse-event', parseEvent],
   ['POST', '/api/ai/transcribe', transcribe],
   ['POST', '/api/ai/edit-event', editEvent],

@@ -5,6 +5,7 @@
    setup can only be changed — or the event deleted — by its host. D1's
    batch() runs the whole write as a single transaction. */
 import { json, err, readJson, sha256 } from './util.js';
+import { enforceFriendDms, activeFriendIds } from './social.js';
 
 /* The Setup step's fields. Only the event's host (createdBy) may change
    them; for anyone else the stored values win. Everything else on an event
@@ -225,7 +226,8 @@ export function defaultState() {
 
 export async function readState(db) {
   const [players, events, chats, history, config] = await db.batch([
-    db.prepare('SELECT id, name, gender, dupr, (email IS NOT NULL) AS claimed FROM players'),
+    db.prepare(`SELECT p.id, p.name, p.gender, p.dupr, (p.email IS NOT NULL) AS claimed, COALESCE(s.searchable, 0) AS searchable
+      FROM players p LEFT JOIN player_settings s ON s.playerId = p.id`),
     db.prepare('SELECT id, data FROM events'),
     db.prepare('SELECT id, data FROM chats'),
     db.prepare('SELECT data FROM history WHERE id = 1'),
@@ -234,7 +236,8 @@ export async function readState(db) {
   const historyRow = history.results[0];
   const configRow = config.results[0];
   return {
-    players: players.results.map(p => ({ id: p.id, name: p.name, gender: p.gender, ...(p.dupr != null ? { dupr: p.dupr } : {}), claimed: !!p.claimed })),
+    // searchable: listed on everyone's Players tab (set by the player, src/social.js).
+    players: players.results.map(p => ({ id: p.id, name: p.name, gender: p.gender, ...(p.dupr != null ? { dupr: p.dupr } : {}), claimed: !!p.claimed, ...(p.claimed && p.searchable ? { searchable: true } : {}) })),
     events: events.results.map(r => ({ id: r.id, ...JSON.parse(r.data) })),
     chats: chats.results.map(r => ({ id: r.id, ...JSON.parse(r.data) })),
     history: historyRow ? JSON.parse(historyRow.data) : {},
@@ -279,7 +282,11 @@ export async function putState(request, env) {
   const state = { ...defaultState(), ...body };
   const db = env.DB;
   const storedEvents = (await db.prepare('SELECT id, data FROM events').all()).results.map(r => ({ id: r.id, ...JSON.parse(r.data) }));
-  state.events = enforceEventHosts(state.events, storedEvents, await requesterId(request, db));
+  const requester = await requesterId(request, db);
+  state.events = enforceEventHosts(state.events, storedEvents, requester);
+  // A new 1:1 chat is only accepted between friends.
+  const storedChatIds = new Set((await db.prepare('SELECT id FROM chats').all()).results.map(r => r.id));
+  state.chats = enforceFriendDms(state.chats || [], storedChatIds, requester, await activeFriendIds(db, requester));
   const stmts = [
     ...await replaceRowsStatements(db, 'players', state.players, ['name', 'gender', 'dupr'], p => [p.name, p.gender, duprOf(p)], 'email IS NOT NULL'),
     ...await replaceRowsStatements(db, 'events', state.events, ['data'], e => { const { id, ...rest } = e; return [JSON.stringify(rest)]; }),

@@ -31,7 +31,8 @@ const event = {
   roster: [{ offset: 0, played: true, sitOut: [], courts: [{ court: 1, mode: 'open', flagged: false, teamA: ['p1', 'p2'], teamB: ['p3', 'p4'], scoreA: 11, scoreB: 7 }] }],
   noShows: [], currentRoundIndex: 0, published: true, memberIds: players.map(p => p.id),
 };
-const chats = [{ id: 'c1', type: 'dm', name: '', participantIds: ['p1', 'p2'], messages: [{ id: 'm1', senderId: 'p1', text: 'See you at 6!', ts: 1700000001000 }] }];
+// A group chat: a new 1:1 chat is only accepted between friends (checked below).
+const chats = [{ id: 'c1', type: 'group', name: 'Tuesday crew', participantIds: ['p1', 'p2', 'p3'], messages: [{ id: 'm1', senderId: 'p1', text: 'See you at 6!', ts: 1700000001000 }] }];
 const history = { 'p1|p2': { partner: 1, opponent: 0 } };
 const withClaimed = ps => ps.map(p => ({ ...p, claimed: false }));
 
@@ -188,6 +189,42 @@ check('a description comes back as a draft', () => {
   assert.deepEqual([body.draft.date, body.draft.startTime, body.draft.durationMin, body.draft.courts], ['2026-09-29', '18:00', 180, 2]);
 });
 console.log(`        (model ${body.aiUsed ? 'answered' : 'unavailable — code parsing only'}${body.aiUsed ? `; players matched: ${body.draft.memberIds.join(', ') || 'none'}` : ''})`);
+
+/* Friends and "visible in search" (src/social.js). Ava is p1. */
+const as = token => ({ Authorization: `Bearer ${token}` });
+const zedId = (await (await fetch(`${base}/api/auth/me`, { headers: as(zedToken) })).json()).player.id;
+res = await fetch(`${base}/api/me/social`);
+check('friends need a signed-in account', () => assert.equal(res.status, 401));
+body = await (await fetch(`${base}/api/me/social`, { headers: as(ava.token) })).json();
+check('an account starts hidden from search, with no friends', () => assert.deepEqual(body, { searchable: false, friends: [], cooldowns: [] }));
+await fetch(`${base}/api/me/social`, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...as(zedToken) }, body: JSON.stringify({ searchable: true }) });
+body = await (await fetch(`${base}/api/state`)).json();
+check('opting in marks only that player searchable in the shared state', () => {
+  assert.equal(body.players.find(p => p.id === zedId).searchable, true);
+  assert.equal(body.players.find(p => p.id === 'p1').searchable, undefined);
+});
+res = await post('/api/friends/p3', {}, as(ava.token));
+check("a player without an account can't be added as a friend", () => assert.equal(res.status, 404));
+res = await post('/api/friends/p1', {}, as(ava.token));
+check("you can't add yourself", () => assert.equal(res.status, 400));
+body = await (await post(`/api/friends/${zedId}`, {}, as(ava.token))).json();
+check('adding a friend lists them', () => assert.deepEqual(body.friends.map(f => f.id), [zedId]));
+body = await (await fetch(`${base}/api/me/social`, { headers: as(zedToken) })).json();
+check('friendship is one-way', () => assert.deepEqual(body.friends, []));
+const before = await (await fetch(`${base}/api/state`)).json();
+const dmChat = { id: 'dm-az', type: 'dm', name: '', participantIds: ['p1', zedId], messages: [] };
+body = await (await putAs(zedToken, { ...before, chats: [...before.chats, dmChat] })).json();
+check("a new 1:1 chat with someone who isn't your friend is refused", () => assert.ok(!body.chats.some(c => c.id === 'dm-az')));
+body = await (await putAs(ava.token, { ...before, chats: [...before.chats, dmChat] })).json();
+check('a new 1:1 chat with a friend is saved', () => assert.ok(body.chats.some(c => c.id === 'dm-az')));
+body = await (await post(`/api/friends/${zedId}/remove`, {}, as(ava.token))).json();
+check('unfriending removes them and starts a 24-hour wait', () => {
+  assert.deepEqual(body.friends, []);
+  assert.equal(body.cooldowns[0].id, zedId);
+  assert.ok(body.cooldowns[0].until > Date.now() + 23.9 * 3600e3);
+});
+res = await post(`/api/friends/${zedId}`, {}, as(ava.token));
+check("they can't be added back within 24 hours", () => assert.equal(res.status, 429));
 
 res = await post('/api/admin/import', {}, { 'X-Migration-Token': 'anything' });
 check('import endpoint is hidden without MIGRATION_TOKEN', () => assert.equal(res.status, 404));

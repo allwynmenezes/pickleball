@@ -65,3 +65,21 @@ CREATE TABLE IF NOT EXISTS ai_calls (
 );
 CREATE INDEX IF NOT EXISTS idx_ai_calls_player_ts ON ai_calls(playerId, ts);
 CREATE INDEX IF NOT EXISTS idx_ai_calls_ts ON ai_calls(ts);
+
+-- Whether a player is listed on everyone's Players tab (they opt in from
+-- their profile). Only the player themselves can change it (src/social.js).
+CREATE TABLE IF NOT EXISTS player_settings (
+  playerId TEXT PRIMARY KEY,
+  searchable INTEGER NOT NULL DEFAULT 0
+);
+
+-- One row per (player, friend), one-way: playerId added friendId. Unfriending
+-- sets removedAt instead of deleting, so the 24-hour wait before adding the
+-- same player again can be enforced.
+CREATE TABLE IF NOT EXISTS friendships (
+  playerId TEXT NOT NULL,
+  friendId TEXT NOT NULL,
+  addedAt INTEGER NOT NULL,
+  removedAt INTEGER,
+  PRIMARY KEY (playerId, friendId)
+);

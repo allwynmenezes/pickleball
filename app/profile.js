@@ -1,10 +1,36 @@
 import React from 'react';
-import { View, Text } from 'react-native';
+import { View, Text, Switch } from 'react-native';
 import { useRouter } from 'expo-router';
 import { pushOnce } from '../lib/nav';
 import { Screen, SectionTitle, Card, Btn, Hint, Row, GenderDot } from '../lib/ui';
 import { useAuth, logout } from '../lib/auth';
+import { useSocial, setSearchable } from '../lib/social';
+import { showAlert } from '../lib/confirm';
 import { colors } from '../lib/theme';
+
+/* Whether you're listed on everyone's Players tab. Off until you turn it on. */
+function SearchVisibility() {
+  const { loaded, searchable } = useSocial();
+  async function toggle(v) {
+    const error = await setSearchable(v);
+    if (error) showAlert(error);
+  }
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderTopWidth: 1, borderTopColor: colors.line, marginTop: 6 }}>
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontSize: 14, fontWeight: '600', color: colors.ink }}>Visible in search</Text>
+        <Text style={{ fontSize: 12, color: colors.slate, marginTop: 2 }}>
+          List me on everyone's Players tab, so people can find me, see my profile and add me as a friend.
+        </Text>
+      </View>
+      <Switch
+        value={searchable} onValueChange={toggle} disabled={!loaded}
+        trackColor={{ true: colors.court, false: colors.line }} thumbColor={colors.white}
+        accessibilityLabel="Visible in search"
+      />
+    </View>
+  );
+}
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -26,6 +52,7 @@ export default function ProfileScreen() {
                 <GenderDot gender={player.gender} />
                 <Text style={{ flex: 1, fontSize: 14, color: colors.slate }} numberOfLines={1}>{player.email}</Text>
               </Row>
+              <SearchVisibility />
               <Btn title="Log out" variant="ghost" small dangerText onPress={logout} style={{ alignSelf: 'flex-end' }} />
             </>
           ) : (

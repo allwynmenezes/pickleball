@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, Platform, KeyboardAvoidingView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen, SectionTitle, Card, Btn, Row, EmptyState, Hint, GenderDot, Pill, TextField } from '../../lib/ui';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   useStore, startChat, sendChatMessage, playerName, playerGender,
 } from '../../lib/store';
 import { useAuth } from '../../lib/auth';
+import { useSocial } from '../../lib/social';
+import FriendButton from '../../components/FriendButton';
 import { pushOnce } from '../../lib/nav';
 import { showAlert } from '../../lib/confirm';
 import { colors, radius } from '../../lib/theme';
@@ -24,6 +26,16 @@ export default function ChatScreen() {
   const [picked, setPicked] = useState([]);
   const [groupName, setGroupName] = useState('');
   const [draft, setDraft] = useState('');
+  // 1:1 chats are only with friends (the server enforces it for new ones).
+  const { friendIds } = useSocial();
+  // "Message" on a friend's profile opens /chat?with=<their id>.
+  const { with: withId } = useLocalSearchParams();
+  useEffect(() => {
+    if (!withId || !asIdLive || !friendIds.has(withId)) return;
+    const { chatId } = startChat(asIdLive, 'dm', [withId], '');
+    if (chatId) { setActiveChatId(chatId); setComposerType(null); }
+    router.setParams({ with: '' });
+  }, [withId, asIdLive, friendIds]);
 
   if (!me) {
     return (
@@ -40,6 +52,7 @@ export default function ChatScreen() {
   if (activeChat) {
     const others = activeChat.participantIds.filter(id => id !== asIdLive).map(playerName);
     const title = activeChat.type === 'group' ? (activeChat.name || others.join(', ')) : (others[0] || 'Chat');
+    const dmWith = activeChat.type === 'dm' ? players.find(p => activeChat.participantIds.includes(p.id) && p.id !== asIdLive) : null;
     return (
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <Screen contentStyle={{ flexGrow: 1 }}>
@@ -62,13 +75,20 @@ export default function ChatScreen() {
               );
             })}
           </Card>
-          <View style={styles.composerRow}>
-            <TextInput
-              value={draft} onChangeText={setDraft} placeholder="Message…" style={styles.composerInput}
-              onSubmitEditing={() => { sendChatMessage(asIdLive, activeChat.id, draft); setDraft(''); }}
-            />
-            <Btn title="Send" small onPress={() => { sendChatMessage(asIdLive, activeChat.id, draft); setDraft(''); }} />
-          </View>
+          {dmWith && !friendIds.has(dmWith.id) ? (
+            <View style={styles.notFriend}>
+              <Hint style={{ marginTop: 0, flex: 1 }}>You can only message friends one-on-one. Add {dmWith.name} as a friend to reply.</Hint>
+              <FriendButton player={dmWith} />
+            </View>
+          ) : (
+            <View style={styles.composerRow}>
+              <TextInput
+                value={draft} onChangeText={setDraft} placeholder="Message…" style={styles.composerInput}
+                onSubmitEditing={() => { sendChatMessage(asIdLive, activeChat.id, draft); setDraft(''); }}
+              />
+              <Btn title="Send" small onPress={() => { sendChatMessage(asIdLive, activeChat.id, draft); setDraft(''); }} />
+            </View>
+          )}
         </Screen>
       </KeyboardAvoidingView>
     );
@@ -82,8 +102,9 @@ export default function ChatScreen() {
     setComposerType(null); setPicked([]); setGroupName('');
   }
 
-  // Only people with an account can read and reply, so only they're offered.
-  const others = players.filter(p => p.claimed && p.id !== asIdLive);
+  // Only people with an account can read and reply, so only they're offered —
+  // and a 1:1 chat only with your friends.
+  const others = players.filter(p => p.claimed && p.id !== asIdLive && (composerType !== 'dm' || friendIds.has(p.id)));
 
   return (
     <Screen>
@@ -126,7 +147,9 @@ export default function ChatScreen() {
             ) : null}
             <Text style={[styles.hintLabel, { marginTop: composerType === 'group' ? 10 : 0 }]}>With</Text>
             <View style={styles.pillRow}>
-              {others.length === 0 ? <Text style={styles.hintLabel}>No one else has an account yet.</Text> : others.map(p => {
+              {others.length === 0 ? (
+                <Text style={styles.emptyText}>{composerType === 'dm' ? 'You can message friends one-on-one. Add friends from the Players tab.' : 'No one else has an account yet.'}</Text>
+              ) : others.map(p => {
                 const isPicked = picked.includes(p.id);
                 return (
                   <Pill
@@ -166,5 +189,6 @@ const styles = StyleSheet.create({
   bubbleTextMine: { color: colors.white, fontSize: 13.5 },
   bubbleTextTheirs: { color: colors.ink, fontSize: 13.5 },
   composerRow: { flexDirection: 'row', gap: 8, marginTop: 10, alignItems: 'center' },
+  notFriend: { flexDirection: 'row', gap: 10, marginTop: 10, alignItems: 'center' },
   composerInput: { flex: 1, borderWidth: 1, borderColor: colors.line, borderRadius: radius.sm, padding: 9, fontSize: 14, backgroundColor: colors.white },
 });

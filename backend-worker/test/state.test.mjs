@@ -2,6 +2,7 @@
    a hosted event — notably scores. Run with `npm run test:parse`. */
 import assert from 'node:assert/strict';
 import { enforceEventHosts } from '../src/state.js';
+import { enforceFriendDms } from '../src/social.js';
 
 let failures = 0;
 const check = (name, fn) => {
@@ -179,6 +180,23 @@ check('a player can\'t start or remove playoffs; the host can', () => {
 check('the series an event belongs to is host-only', () => {
   const out = save(ev => { ev.seriesId = 'hijack'; }, 'a');
   assert.equal(out.seriesId, undefined);
+});
+
+/* enforceFriendDms (src/social.js): a new 1:1 chat only between friends. */
+const dm = (id, a, b) => ({ id, type: 'dm', name: '', participantIds: [a, b], messages: [] });
+check('a new 1:1 chat with a friend is kept', () => {
+  assert.deepEqual(enforceFriendDms([dm('c1', 'a', 'b')], new Set(), 'a', new Set(['b'])).map(c => c.id), ['c1']);
+});
+check('a new 1:1 chat with someone who isn\'t a friend is dropped', () => {
+  assert.deepEqual(enforceFriendDms([dm('c1', 'a', 'b')], new Set(), 'a', new Set(['c'])), []);
+});
+check('a new 1:1 chat is dropped when sent signed out, or by someone not in it', () => {
+  assert.deepEqual(enforceFriendDms([dm('c1', 'a', 'b')], new Set(), null, new Set()), []);
+  assert.deepEqual(enforceFriendDms([dm('c1', 'a', 'b')], new Set(), 'x', new Set(['a', 'b'])), []);
+});
+check('stored 1:1 chats and group chats pass through', () => {
+  const group = { id: 'g1', type: 'group', name: 'Crew', participantIds: ['a', 'b', 'c'], messages: [] };
+  assert.deepEqual(enforceFriendDms([dm('c1', 'a', 'b'), group], new Set(['c1']), null, new Set()).map(c => c.id), ['c1', 'g1']);
 });
 
 if (failures) { console.error(`\n${failures} failed`); process.exit(1); }

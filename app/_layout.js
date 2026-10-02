@@ -35,6 +35,7 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="event/[id]" options={{ animation: 'slide_from_bottom' }} />
         <Stack.Screen name="profile" options={{ animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="player/[id]" options={{ animation: 'slide_from_bottom' }} />
         <Stack.Screen name="login" options={{ animation: 'slide_from_bottom' }} />
         <Stack.Screen name="signup" options={{ animation: 'slide_from_bottom' }} />
         <Stack.Screen name="forgot-password" options={{ animation: 'slide_from_bottom' }} />
