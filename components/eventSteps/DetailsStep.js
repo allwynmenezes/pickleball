@@ -5,16 +5,18 @@ import { getHist } from '../../lib/engine';
 import { useStore, setFlagThreshold } from '../../lib/store';
 import { colors } from '../../lib/theme';
 
-/* This step is intentionally global, not scoped to the current event — it
-   mirrors the original app's History tab, which reports rolling pairing
-   coverage and past sessions across the whole group. */
-export default function DetailsStep() {
-  const players = useStore(s => s.players);
+/* Pairing coverage uses the whole group's history (every published
+   session), but only for the players in this event — a pair that never
+   met only matters if both are here to be steered together. */
+export default function DetailsStep({ ev }) {
+  const allPlayers = useStore(s => s.players);
+  const memberIds = (ev && ev.memberIds) || [];
+  const players = allPlayers.filter(p => memberIds.includes(p.id));
   const history = useStore(s => s.history);
   const flagThreshold = useStore(s => s.flagThreshold);
   const events = useStore(s => s.events);
 
-  if (players.length < 2) return <EmptyState icon="stats-chart">Add at least two players to see pairing coverage.</EmptyState>;
+  if (players.length < 2) return <EmptyState icon="stats-chart">Add at least two players to this event to see their pairing coverage.</EmptyState>;
 
   let fullyCovered = 0, partial = 0, none = 0, totalPairs = 0;
   const flagged = [];
@@ -33,7 +35,7 @@ export default function DetailsStep() {
 
   return (
     <View>
-      <SectionTitle first>Rolling coverage across {sessionCount} published session(s)</SectionTitle>
+      <SectionTitle first>Coverage for this event's {players.length} players across {sessionCount} published session(s)</SectionTitle>
       <Card lift>
         <BigNum value={relDone} label={`of ${relTotal} partner+opponent relationships completed`} />
         <Hint>{fullyCovered} pairs fully covered (partnered and opposed at least once) · {partial} partially · {none} not yet.</Hint>

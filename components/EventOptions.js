@@ -18,7 +18,7 @@ import {
 } from '../lib/formats';
 import { colors, radius } from '../lib/theme';
 
-const items = list => list.map(m => ({ label: m.label, value: m.key }));
+const items = list => list.map(m => ({ label: m.label, value: m.key, description: m.description }));
 const STANDINGS_BLURB = {
   off: 'No standings — games are just for fun.',
   winPct: 'Ranked by the share of games won (sitting out never counts against anyone), then average point difference.',
@@ -44,7 +44,10 @@ export function EventOptionsEditor({ ev }) {
         <Select
           label="Format" value={o.format === 'custom' ? 'custom' : (fmt ? fmt.key : 'popcorn')}
           onValueChange={(v) => { if (v !== 'custom') applyFormat(ev, v); }}
-          items={[...FORMATS.map(f => ({ label: f.label, value: f.key })), ...(o.format === 'custom' ? [{ label: 'Custom', value: 'custom' }] : [])]}
+          items={[
+            ...FORMATS.map(f => ({ label: f.label, value: f.key, description: f.blurb, group: f.group })),
+            ...(o.format === 'custom' ? [{ label: 'Custom', value: 'custom', description: 'Your own mix of the options.', group: 'Custom' }] : []),
+          ]}
         />
         <Hint style={styles.hint}>{fmt ? fmt.blurb : 'Your own mix of the options below.'} Picking a format fills in the options below; change any of them to fine-tune.</Hint>
 
@@ -71,9 +74,12 @@ export function EventOptionsEditor({ ev }) {
             <Select label="Playoffs" value={o.playoffs} onValueChange={set('playoffs')} items={items(PLAYOFF_TYPES)} />
             {o.playoffs !== 'none' ? (
               <>
-                <Select label="Teams in the playoffs" value={o.playoffTeams} onValueChange={(v) => setEventOption(ev, 'playoffTeams', Number(v))} items={sizes.map(s => ({ label: String(s), value: s }))} />
+                <Select label="Teams in the playoffs" value={o.playoffTeams} onValueChange={(v) => setEventOption(ev, 'playoffTeams', Number(v))} items={sizes.map(s => ({ label: String(s), value: s, description: `The top ${s} ${o.partners === 'singles' ? 'players' : 'teams'} play the bracket.` }))} />
                 {o.playoffs === 'single' ? <Checkbox label="Play a 3rd-place match" checked={!!o.thirdPlace} onChange={set('thirdPlace')} /> : null}
-                {o.repeat !== 'none' ? <Select label="Seed the playoffs from" value={o.playoffSeedFrom} onValueChange={set('playoffSeedFrom')} items={[{ label: "This session's standings", value: 'event' }, { label: 'Season standings', value: 'season' }]} /> : null}
+                {o.repeat !== 'none' ? <Select label="Seed the playoffs from" value={o.playoffSeedFrom} onValueChange={set('playoffSeedFrom')} items={[
+                  { label: "This session's standings", value: 'event', description: "Only this session's results decide the seeds." },
+                  { label: 'Season standings', value: 'season', description: 'Results from every session in the series so far.' },
+                ]} /> : null}
                 <Hint style={styles.hint}>You start the playoffs from the Rounds step when pool play is done; rounds not yet played are dropped. {o.partners === 'rotating' ? 'With rotating partners, the top players are paired best with worst.' : ''}</Hint>
               </>
             ) : null}

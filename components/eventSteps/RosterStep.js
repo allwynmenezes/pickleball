@@ -108,7 +108,8 @@ export default function RosterStep({ ev }) {
           {ev.roster.map((r, idx) => (
             <View key={idx} style={[
               styles.roundBlock,
-              idx === (ev.currentRoundIndex || 0) && ev.published && styles.roundCurrent,
+              // Before publishing the current round is the warm-up (round 0).
+              idx === (ev.currentRoundIndex || 0) && styles.roundCurrent,
               ev.published && idx < (ev.currentRoundIndex || 0) && styles.roundPlayed,
             ]}>
               <Text style={styles.roundHead}>{idx === 0 ? 'Warm-up · ' : ''}{fmtClock(offsetToClock(ev, r.offset))}{r.repeatsWarmup ? <Text style={styles.roundNote}> · same players as warm-up</Text> : null}{r.groupSet && r.groupSet.pools ? <Text style={styles.roundNote}> · pools</Text> : r.groupSet ? <Text style={styles.roundNote}> · groups{new Set(r.groupSet.ns || [r.groupSet.n]).size === 1 ? `, game ${r.groupSet.n + 1} of ${r.groupSet.len || 3}` : ''}</Text> : null}{r.provisional ? <Text style={styles.roundNote}> · provisional</Text> : null}</Text>

@@ -7,12 +7,12 @@ import { Screen, Card, Btn, TextField, DateField } from '../../lib/ui';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import StepIndicator from '../../components/StepIndicator';
 import { TimeWheelField } from '../../components/WheelPicker';
-import { localDateStr, eventOptions } from '../../lib/engine';
+import { localDateStr, eventOptions, offsetToClock, minutesBetween, fmtDuration } from '../../lib/engine';
 import { useAuth } from '../../lib/auth';
 import { showConfirm } from '../../lib/confirm';
 import {
   useStore, getEventById, newEvent, deleteEvent,
-  beginNewEventFlow, beginEditEventFlow, cancelEventFlow, saveEventFlow, eventFlowHasChanges,
+  beginNewEventFlow, beginEditEventFlow, cancelEventFlow, saveEventFlow, eventFlowHasChanges, checkpointEventFlow,
 } from '../../lib/store';
 import SetupStep from '../../components/eventSteps/SetupStep';
 import RsvpStep from '../../components/eventSteps/RsvpStep';
@@ -44,6 +44,12 @@ export default function EventFlowScreen() {
   const [allMounted, setAllMounted] = useState(false);
   const { player: me } = useAuth();
   const [aiOpen, setAiOpen] = useState(false);
+  /* The screen opens read-only; the host's Edit (in the action bar) turns
+     on edit mode, which Save keeps and Cancel throws away. It lives here,
+     not in Setup, so it survives the pager being rebuilt when the steps
+     change (e.g. switching Games to "No games" drops Roster and Rounds). */
+  const [editing, setEditing] = useState(false);
+  const [pending, setPending] = useState(null); // 'save' | 'discard'
   const insets = useSafeAreaInsets();
 
   /* The step you opened renders straight away, so its data is on screen as
@@ -76,18 +82,35 @@ export default function EventFlowScreen() {
     }
   }, []);
 
-  /* Leaving any other way than Save (Android back gesture/button, iOS swipe)
-     would otherwise keep the edits, since they're applied as you go. Treat
-     it like Cancel: if anything changed, ask before discarding. */
+  /* Save / Cancel finish here, once edit mode has ended and the Setup form
+     has unmounted — so a still-focused field has committed its last value
+     first. Save makes the edits the new baseline; Cancel restores the
+     baseline taken when Edit was tapped. */
+  useEffect(() => {
+    if (!pending || editing) return;
+    if (pending === 'discard') {
+      cancelEventFlow(localEventId);
+      const restored = getEventById(localEventId);
+      if (restored) beginEditEventFlow(restored);
+    } else {
+      checkpointEventFlow(localEventId);
+    }
+    setPending(null);
+  }, [pending, editing]);
+
+  /* Leaving in edit mode any other way than Save (Android back
+     gesture/button, iOS swipe) would otherwise keep the edits, since
+     they're applied as you go. Treat it like Cancel: if anything changed,
+     ask before discarding. Outside edit mode, leaving is like Close. */
   useEffect(() => navigation.addListener('beforeRemove', (e) => {
-    if (leaveOk.current || !localEventId || !eventFlowHasChanges(localEventId)) return;
+    if (leaveOk.current || !editing || !localEventId || !eventFlowHasChanges(localEventId)) return;
     e.preventDefault();
-    showConfirm('Discard everything done in this session? Nothing will be saved.', () => {
+    showConfirm('Discard the changes you made while editing? Nothing will be saved.', () => {
       cancelEventFlow(localEventId);
       leaveOk.current = true;
       navigation.dispatch(e.data.action);
     }, 'Discard');
-  }), [navigation, localEventId]);
+  }), [navigation, localEventId, editing]);
 
   function submitDraft() {
     if (!draft.name.trim()) return;
@@ -97,19 +120,24 @@ export default function EventFlowScreen() {
     beginEditEventFlow(created);
     setLocalEventId(created.id);
     setStep('setup');
+    setEditing(true);
   }
   function cancelDraft() {
     router.back();
   }
 
   function onCancel() {
-    showConfirm('Discard everything done in this session? Nothing will be saved.', () => {
-      cancelEventFlow(localEventId);
-      leaveOk.current = true;
-      router.back();
+    showConfirm('Discard the changes you made while editing? Nothing will be saved.', () => {
+      setEditing(false);
+      setPending('discard');
     }, 'Discard');
   }
   function onSave() {
+    setEditing(false);
+    setPending('save');
+  }
+  // Out of edit mode everything is already saved, so Close just leaves.
+  function onClose() {
     saveEventFlow();
     leaveOk.current = true;
     router.back();
@@ -124,6 +152,8 @@ export default function EventFlowScreen() {
 
   // Draft composer — nothing created yet.
   if (isNew && !localEventId) {
+    const draftMin = Math.max(1, parseInt(draft.durationMin, 10) || 240);
+    const draftEnd = offsetToClock({ startTime: draft.startTime }, draftMin);
     return (
       <View style={{ flex: 1, backgroundColor: colors.chalk }}>
         <Screen>
@@ -139,12 +169,15 @@ export default function EventFlowScreen() {
             <TextField label="Event name" value={draft.name} onChangeText={(v) => setDraft({ ...draft, name: v })} placeholder="e.g. Tuesday Night" autoFocus />
             <View style={styles.grid2}>
               <DateField label="Date" value={draft.date} onChange={(v) => setDraft({ ...draft, date: v })} />
-              <TimeWheelField label="Start time" value={draft.startTime} onChange={(v) => setDraft({ ...draft, startTime: v })} />
+              <TextField label="Number of courts" value={draft.courts} onChangeText={(v) => setDraft({ ...draft, courts: v })} keyboardType="number-pad" />
             </View>
+            {/* The draft keeps a length (as the assistant fills it in); picking
+                either time keeps the other where it is. */}
             <View style={styles.grid2}>
-              <TextField label="Duration (min)" value={draft.durationMin} onChangeText={(v) => setDraft({ ...draft, durationMin: v })} keyboardType="number-pad" />
-              <TextField label="Courts" value={draft.courts} onChangeText={(v) => setDraft({ ...draft, courts: v })} keyboardType="number-pad" />
+              <TimeWheelField label="Start time" value={draft.startTime} onChange={(v) => setDraft({ ...draft, startTime: v, durationMin: String(minutesBetween(v, draftEnd)) })} />
+              <TimeWheelField label="End time" value={draftEnd} onChange={(v) => setDraft({ ...draft, durationMin: String(minutesBetween(draft.startTime, v)) })} />
             </View>
+            <Text style={styles.duration}>Duration: {fmtDuration(draftMin)}</Text>
             <View style={styles.grid2}>
               <TextField label="Game length (min)" value={draft.gameLenMin} onChangeText={(v) => setDraft({ ...draft, gameLenMin: v })} keyboardType="number-pad" />
               <View style={{ flex: 1 }} />
@@ -190,14 +223,20 @@ export default function EventFlowScreen() {
   // (the server leaves those open too).
   const canRun = !ev.createdBy || canEdit;
 
+  function onEdit() {
+    checkpointEventFlow(ev.id);
+    setEditing(true);
+    goToStep('setup');
+  }
+
   function renderStep(key) {
     switch (key) {
-      case 'setup': return <SetupStep ev={ev} active={current === 'setup'} onDeleteEvent={onDeleteEvent} canEdit={canEdit} />;
+      case 'setup': return <SetupStep ev={ev} editing={editing} onDeleteEvent={onDeleteEvent} canEdit={canEdit} />;
       case 'rsvp': return <RsvpStep ev={ev} meId={me ? me.id : null} canEdit={canRun} />;
       case 'booking': return <BookingStep ev={ev} />;
       case 'roster': return <RosterStep ev={ev} />;
       case 'rounds': return <RoundsStep ev={ev} canEdit={canRun} meId={me ? me.id : null} />;
-      case 'details': return <DetailsStep />;
+      case 'details': return <DetailsStep ev={ev} />;
       default: return null;
     }
   }
@@ -228,7 +267,13 @@ export default function EventFlowScreen() {
         </PagerView>
       )}
       <View style={[styles.actionBar, { paddingBottom: Math.max(insets.bottom, 10) }]}>
-        <Text style={styles.title} numberOfLines={1}>{ev.name}</Text>
+        <View style={styles.titleBox}>
+          <Text style={styles.title} numberOfLines={1}>{ev.name}</Text>
+          <View style={[styles.modeTag, editing && styles.modeTagEdit]}>
+            <Ionicons name={editing ? 'create-outline' : 'eye-outline'} size={11} color={editing ? colors.white : colors.slate} />
+            <Text style={[styles.modeTagText, editing && styles.modeTagTextEdit]}>{editing ? 'Edit mode' : 'View mode'}</Text>
+          </View>
+        </View>
         <View style={styles.pillRow}>
           {/* The assistant, on every step — for the host, until games start. */}
           {canEdit && !ev.started ? (
@@ -240,8 +285,17 @@ export default function EventFlowScreen() {
               <Ionicons name="sparkles" size={16} color={colors.court} />
             </Pressable>
           ) : null}
-          <Btn title="Cancel" variant="ghost" small onPress={onCancel} />
-          <Btn title="Save" small onPress={onSave} />
+          {editing ? (
+            <>
+              <Btn title="Cancel" variant="ghost" small onPress={onCancel} />
+              <Btn title="Save" small onPress={onSave} />
+            </>
+          ) : (
+            <>
+              <Btn title="Close" variant="ghost" small onPress={onClose} />
+              {canEdit && !ev.started ? <Btn title="Edit" icon="create-outline" small onPress={onEdit} /> : null}
+            </>
+          )}
         </View>
       </View>
       {canEdit && !ev.started ? <AiEventPanel eventId={ev.id} visible={aiOpen} onClose={() => setAiOpen(false)} /> : null}
@@ -251,8 +305,14 @@ export default function EventFlowScreen() {
 
 const styles = StyleSheet.create({
   title: { fontWeight: '600', fontSize: 16, color: colors.ink, flexShrink: 1 },
+  titleBox: { flex: 1, minWidth: 0, gap: 3 },
+  modeTag: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', borderRadius: 999, paddingHorizontal: 7, paddingVertical: 1, backgroundColor: colors.chalk, borderWidth: 1, borderColor: colors.line },
+  modeTagEdit: { backgroundColor: colors.court, borderColor: colors.court },
+  modeTagText: { fontSize: 10.5, fontWeight: '700', color: colors.slate, textTransform: 'uppercase', letterSpacing: 0.4 },
+  modeTagTextEdit: { color: colors.white },
   grid2: { flexDirection: 'row', gap: 10 },
   pillRow: { flexDirection: 'row', gap: 8, justifyContent: 'flex-end' },
+  duration: { fontSize: 13, color: colors.ink, fontWeight: '600', marginTop: -2 },
   stepsBar: { backgroundColor: colors.card, borderBottomWidth: 1, borderBottomColor: colors.line },
   actionBar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10,

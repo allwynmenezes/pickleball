@@ -7,27 +7,31 @@ import { showAlert, showConfirm } from '../../lib/confirm';
 import {
   updateEventField, normalizeSegments, addSegment, addBreak, removeSegment, updateSegment, updateSegmentMode, updateSegmentGameLen,
   addPlayerToEvent, addAllPlayersToEvent, addNewPlayerToEvent, removeEventPlayer, useStore, getPlayerById, editPlayer, setPlayerDupr,
-  courtLabelForRange, checkpointEventFlow, playerName,
+  courtLabelForRange, playerName, playerBlurb, moveBreak, setEventTimes,
 } from '../../lib/store';
-import { fmtClock, offsetToClock, toOffset, timeOptions, gameLen, segmentGameLen, eventStatus, STATUS_BADGE, isBreakSegment, perCourt, playerCapacity } from '../../lib/engine';
+import { fmtClock, offsetToClock, toOffset, timeOptions, gameLen, segmentGameLen, eventStatus, STATUS_BADGE, isBreakSegment, perCourt, playerCapacity, fmtDuration } from '../../lib/engine';
 import { EventOptionsEditor, EventOptionsSummary } from '../EventOptions';
 import { colors, radius } from '../../lib/theme';
 
-const GENDERS = [{ label: 'Male', value: 'M' }, { label: 'Female', value: 'F' }, { label: 'Other', value: 'O' }];
+const GENDERS = [
+  { label: 'Male', value: 'M', description: "Plays on men's and mixed courts." },
+  { label: 'Female', value: 'F', description: "Plays on women's and mixed courts." },
+  { label: 'Other', value: 'O', description: 'Plays on any-combination courts.' },
+];
 
 const MODES = [
-  { key: 'open', label: 'Any combination' },
-  { key: 'men', label: "Men's only" },
-  { key: 'women', label: "Women's only" },
-  { key: 'mixed', label: 'Mixed' },
-  { key: 'break', label: 'Break (no games)' },
+  { key: 'open', label: 'Any combination', description: 'Anyone can play anyone on this court.' },
+  { key: 'men', label: "Men's only", description: 'Only men play on this court.' },
+  { key: 'women', label: "Women's only", description: 'Only women play on this court.' },
+  { key: 'mixed', label: 'Mixed', description: 'Each team is one man and one woman.' },
+  { key: 'break', label: 'Break (no games)', description: 'This court rests for the segment.' },
 ];
 
 function ModeSelect({ value, onChange }) {
   return (
     <Select
       value={value} onValueChange={onChange}
-      items={MODES.map(m => ({ label: m.label, value: m.key }))}
+      items={MODES.map(m => ({ label: m.label, value: m.key, description: m.description }))}
       style={{ flex: 1 }}
     />
   );
@@ -65,45 +69,33 @@ function SegmentGameLenField({ ev, idx, seg }) {
 }
 
 /* Setup opens read-only. Only the event's host (the account that created
-   it) gets an Edit button — and with it Delete, which lives in edit mode.
-   The server enforces the same rule on every save.
-   Done keeps the edits for good: it makes them part of the saved event, so
-   the event's Cancel (or backing out) no longer undoes them. */
+   it) gets the Edit button in the event's action bar — and with it Delete,
+   which lives in edit mode. The server enforces the same rule on every
+   save. Edit mode belongs to the event screen (app/event/[id].js), so it
+   survives the pager rebuilding when the steps change. */
 
-export default function SetupStep({ ev, onDeleteEvent, canEdit, active }) {
-  const [editing, setEditing] = React.useState(false);
-  const [addingBreak, setAddingBreak] = React.useState(false);
-  const [saveOnClose, setSaveOnClose] = React.useState(false);
-  // Leaving the Setup page always ends editing.
-  React.useEffect(() => { if (!active) setEditing(false); }, [active]);
-  // Runs after the form has unmounted, i.e. after any still-focused field
-  // has committed its last value.
-  React.useEffect(() => {
-    if (saveOnClose && !editing) { checkpointEventFlow(ev.id); setSaveOnClose(false); }
-  }, [saveOnClose, editing]);
+export default function SetupStep({ ev, onDeleteEvent, canEdit, editing }) {
   normalizeSegments(ev);
-  if (!editing || !canEdit || ev.started) return <SetupSummary ev={ev} canEdit={canEdit && !ev.started} onEdit={() => setEditing(true)} onDelete={onDeleteEvent} />;
+  if (!editing || !canEdit || ev.started) return <SetupSummary ev={ev} canEdit={canEdit && !ev.started} onDelete={onDeleteEvent} />;
   const courtOpts = Array.from({ length: ev.courts }, (_, i) => i + 1);
+  const endClock = offsetToClock(ev, ev.durationMin);
 
   return (
     <View>
-      <View style={styles.modeBar}>
-        <Text style={styles.modeBarText}>Editing setup</Text>
-        <Btn title="Done" icon="checkmark" small onPress={() => { setSaveOnClose(true); setEditing(false); }} />
-      </View>
       <SectionTitle first>Event</SectionTitle>
       <Card style={styles.fieldStack}>
         <TextField label="Event name" value={ev.name} onChangeText={(v) => updateEventField(ev, 'name', v)} />
         <View style={styles.fieldRow}>
           <DateField label="Date" value={ev.date} onChange={(v) => updateEventField(ev, 'date', v)} />
-          <TimeWheelField label="Start time" value={ev.startTime} onChange={(v) => updateEventField(ev, 'startTime', v)} />
+          <NumberField label="Number of courts" ev={ev} field="courts" value={ev.courts} />
         </View>
         <View style={styles.fieldRow}>
-          <NumberField label="Total duration (min)" ev={ev} field="durationMin" value={ev.durationMin} />
-          <NumberField label="Courts available" ev={ev} field="courts" value={ev.courts} />
+          <TimeWheelField label="Start time" value={ev.startTime} onChange={(v) => setEventTimes(ev, v, endClock)} />
+          <TimeWheelField label="End time" value={endClock} onChange={(v) => setEventTimes(ev, ev.startTime, v)} />
         </View>
+        <Text style={styles.duration}>Duration: {fmtDuration(ev.durationMin)}</Text>
         <NumberField label="Game length (min per round)" ev={ev} field="gameLenMin" value={gameLen(ev)} />
-        <Hint style={{ marginTop: 0 }}>Capacity is {playerCapacity(ev) === Infinity ? 'unlimited (extra players sit out in turns)' : `${playerCapacity(ev)} players (courts × ${perCourt(ev)})`}. Each round is {gameLen(ev)} min unless a segment below sets its own game length; the first game doubles as warm-up. Ends at {fmtClock(offsetToClock(ev, ev.durationMin))}.</Hint>
+        <Hint style={{ marginTop: 0 }}>Capacity is {playerCapacity(ev) === Infinity ? 'unlimited (extra players sit out in turns)' : `${playerCapacity(ev)} players (courts × ${perCourt(ev)})`}. Each round is {gameLen(ev)} min unless a segment below sets its own game length; the first game doubles as warm-up.</Hint>
         <Btn title="Delete event" icon="trash" variant="ghost" small dangerText onPress={onDeleteEvent} style={{ alignSelf: 'flex-end' }} />
       </Card>
 
@@ -114,11 +106,18 @@ export default function SetupStep({ ev, onDeleteEvent, canEdit, active }) {
         <Hint style={{ marginTop: 0, marginBottom: 4 }}>Segments always run back-to-back, covering the whole event with no gaps or overlaps. Move a boundary time to reshape the two segments on either side of it.</Hint>
         {ev.segments.map((s, idx) => {
           const isLast = idx === ev.segments.length - 1;
+          if (isBreakSegment(ev, s)) {
+            return (
+              <React.Fragment key={idx}>
+                {idx > 0 ? <View style={styles.segDivider} /> : null}
+                <BreakEditor ev={ev} idx={idx} seg={s} />
+              </React.Fragment>
+            );
+          }
           return (
             <React.Fragment key={idx}>
             {idx > 0 ? <View style={styles.segDivider} /> : null}
-            <View style={[styles.segBar, isBreakSegment(ev, s) && styles.breakSeg]}>
-              {isBreakSegment(ev, s) ? <BreakTag style={{ marginBottom: 6 }} /> : null}
+            <View style={styles.segBar}>
               <View style={styles.grid2}>
                 <Field label="Starts at"><Text style={styles.disabledInput}>{fmtClock(s.start)}</Text></Field>
                 {isLast ? (
@@ -159,10 +158,9 @@ export default function SetupStep({ ev, onDeleteEvent, canEdit, active }) {
         <View style={styles.segDivider} />
         <View style={styles.addRow}>
           <Btn title="Add game segment" icon="add" variant="outline" small onPress={() => { const r = addSegment(ev); if (r.error) showAlert(r.error); }} />
-          <Btn title="Add break" icon="cafe-outline" variant="outline" small onPress={() => setAddingBreak(true)} />
+          <Btn title="Add break" icon="cafe-outline" variant="outline" small onPress={() => { const r = addBreak(ev, defaultBreakStart(ev), 15); if (r.error) showAlert(r.error); }} />
         </View>
-        {addingBreak ? <AddBreakForm ev={ev} onDone={() => setAddingBreak(false)} /> : null}
-        <Hint>If a Mixed or single-gender court can't be filled with the players actually available, that court falls back to "any combination" for the affected time and gets flagged in the roster.</Hint>
+        <Hint>A break stops games on every court. To rest just one court, set it to "Break" in a game segment's mode per court. If a Mixed or single-gender court can't be filled with the players actually available, that court falls back to "any combination" for the affected time and gets flagged in the roster.</Hint>
       </Card>
 
       <EventMembers ev={ev} />
@@ -170,7 +168,7 @@ export default function SetupStep({ ev, onDeleteEvent, canEdit, active }) {
   );
 }
 
-function SetupSummary({ ev, canEdit, onEdit, onDelete }) {
+function SetupSummary({ ev, canEdit, onDelete }) {
   const players = useStore(s => s.players);
   const members = (ev.memberIds || []).map(getPlayerById).filter(Boolean);
   const courtOpts = Array.from({ length: ev.courts }, (_, i) => i + 1);
@@ -179,20 +177,15 @@ function SetupSummary({ ev, canEdit, onEdit, onDelete }) {
 
   return (
     <View>
-      <View style={styles.modeBar}>
-        {canEdit ? (
-          <>
-            <Text style={styles.modeBarText}>Event setup</Text>
-            <Btn title="Edit" icon="create-outline" variant="outline" small onPress={onEdit} />
-          </>
-        ) : (
+      {canEdit ? null : (
+        <View style={styles.modeBar}>
           <Hint style={{ marginTop: 0, flex: 1 }}>
             {ev.started
               ? 'Games have started — setup is read-only.'
               : `Only the host${ev.createdBy ? `, ${playerName(ev.createdBy)},` : ''} can edit or delete this event.`}
           </Hint>
-        )}
-      </View>
+        </View>
+      )}
 
       <SectionTitle first>Event</SectionTitle>
       <Card>
@@ -253,45 +246,54 @@ function SetupSummary({ ev, canEdit, onEdit, onDelete }) {
   );
 }
 
-/* "Add break": when it starts (5-minute steps within the event) and how
-   long it lasts (5-minute steps up to the time left from that start); the
-   end time is worked out and shown. See addBreak in lib/store.js. */
-function AddBreakForm({ ev, onDone }) {
+/* Where "Add break" puts a new 15-minute break: on the first hour mark
+   (a third of the way into a short event) — or, if that isn't free game
+   time, halfway through the longest game segment. The host moves it from
+   there. */
+function defaultBreakStart(ev) {
+  const round5 = m => Math.max(5, Math.min(ev.durationMin - 20, Math.round(m / 5) * 5));
+  const pick = round5(ev.durationMin >= 80 ? 60 : ev.durationMin / 3);
+  const games = ev.segments.filter(s => !isBreakSegment(ev, s)).map(s => [toOffset(ev, s.start), toOffset(ev, s.end) || ev.durationMin]);
+  if (games.some(([a, b]) => a <= pick && pick + 15 <= b)) return pick;
+  const [a, b] = games.reduce((best, g) => (g[1] - g[0] > best[1] - best[0] ? g : best), [0, 0]);
+  return round5(a + (b - a - 15) / 2);
+}
+
+/* A break (every court rests): pick when it starts and ends, right in the
+   segment list. It covers all courts, so there's no per-court list. See
+   moveBreak in lib/store.js. */
+function BreakEditor({ ev, idx, seg }) {
+  const start = toOffset(ev, seg.start);
+  const end = idx === ev.segments.length - 1 ? ev.durationMin : toOffset(ev, seg.end);
   const starts = [];
-  for (let off = 5; off <= ev.durationMin - 5; off += 5) starts.push(off);
-  // Default: on the first hour mark, else a third of the way in.
-  const [start, setStart] = React.useState(starts.includes(60) ? 60 : starts[Math.floor(starts.length / 3)] || 0);
-  const maxLen = ev.durationMin - start;
-  const lengths = [];
-  for (let m = 5; m <= maxLen; m += 5) lengths.push(m);
-  const [len, setLen] = React.useState(Math.min(15, maxLen));
-  const length = Math.min(len, maxLen);
-  const endClock = offsetToClock(ev, start + length);
-  const fmtLen = m => (m >= 60 ? `${Math.floor(m / 60)} hr${m % 60 ? ` ${m % 60} min` : ''}` : `${m} min`);
+  for (let off = 0; off <= ev.durationMin - 5; off += 5) starts.push(off);
+  const ends = [];
+  for (let off = start + 5; off <= ev.durationMin; off += 5) ends.push(off);
+  const move = (a, b) => { const r = moveBreak(ev, idx, a, b); if (r.error) showAlert(r.error); };
+  const clock = off => fmtClock(offsetToClock(ev, off));
 
   return (
-    <View style={[styles.breakSeg, { marginTop: 12, gap: 10 }]}>
-      <BreakTag />
-      <Text style={styles.addBreakTitle}>Add a break</Text>
+    <View style={[styles.segBar, styles.breakSeg]}>
+      <BreakTag style={{ marginBottom: 6 }} />
       <View style={styles.grid2}>
         <WheelSelectField
           label="Starts at" value={start}
-          onValueChange={(v) => setStart(Number(v))}
-          items={starts.map(off => ({ label: fmtClock(offsetToClock(ev, off)), value: off }))}
+          onValueChange={(v) => { const a = Number(v); move(a, Math.min(ev.durationMin, a + (end - start))); }}
+          items={starts.map(off => ({ label: clock(off), value: off }))}
         />
         <WheelSelectField
-          label="Lasts" value={length}
-          onValueChange={(v) => setLen(Number(v))}
-          items={lengths.map(m => ({ label: fmtLen(m), value: m }))}
+          label="Ends at" value={end}
+          onValueChange={(v) => move(start, Number(v))}
+          items={ends.map(off => ({ label: clock(off), value: off }))}
         />
       </View>
-      <Text style={styles.breakNote}>
-        Break from {fmtClock(offsetToClock(ev, start))} to <Text style={{ fontWeight: '700' }}>{fmtClock(endClock)}</Text> — no games on any court.
-      </Text>
-      <View style={styles.addRow}>
-        <Btn title="Cancel" variant="ghost" small onPress={onDone} />
-        <Btn title="Add break" small onPress={() => { const r = addBreak(ev, start, length); if (r.error) showAlert(r.error); else onDone(); }} />
-      </View>
+      <Text style={styles.breakNote}>No games on any court from {clock(start)} to {clock(end)}.</Text>
+      <Hint style={{ marginTop: 4 }}>To rest just one court, set it to "Break (no games)" under Mode per court in a game segment.</Hint>
+      <Btn
+        title="Remove break" icon="trash" variant="ghost" small dangerText
+        onPress={() => { const r = removeSegment(ev, idx); if (r.error) showAlert(r.error); }}
+        style={{ marginTop: 6, alignSelf: 'flex-end' }}
+      />
     </View>
   );
 }
@@ -383,7 +385,7 @@ function EventMembers({ ev }) {
             <View style={styles.addExistingRow}>
               <Select
                 value={pickedExisting} onValueChange={setPickedExisting} placeholder="Choose…"
-                items={nonMembers.map(p => ({ label: `${p.name} (${p.gender})`, value: p.id }))}
+                items={nonMembers.map(p => ({ label: p.name, value: p.id, description: playerBlurb(p) }))}
               />
               <Btn title="Add" small onPress={() => { if (pickedExisting) { addPlayerToEvent(ev, pickedExisting); setPickedExisting(''); } }} />
             </View>
@@ -409,14 +411,12 @@ const styles = StyleSheet.create({
   grid2: { flexDirection: 'row', gap: 10, marginBottom: 10 },
   fieldStack: { gap: 10 },
   modeBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 14 },
-  modeBarText: { fontSize: 13, fontWeight: '600', color: colors.slate },
   summaryName: { fontSize: 16, fontWeight: '700', color: colors.ink, marginBottom: 6 },
   infoRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.line },
   infoLabel: { fontSize: 12.5, color: colors.slate, fontWeight: '600' },
   infoValue: { fontSize: 13.5, color: colors.ink, flexShrink: 1, textAlign: 'right' },
   summarySeg: { borderLeftWidth: 3, borderLeftColor: colors.court, paddingLeft: 12, gap: 3 },
   addRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, flexWrap: 'wrap' },
-  addBreakTitle: { fontSize: 15, fontWeight: '700', color: colors.ink },
   breakSeg: { backgroundColor: colors.ballTint, borderRadius: radius.sm, padding: 10, borderLeftWidth: 3, borderLeftColor: colors.ball },
   breakSummary: { backgroundColor: colors.ballTint, borderLeftColor: colors.ball, borderRadius: radius.sm, paddingVertical: 10, paddingRight: 10 },
   breakHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
@@ -430,6 +430,7 @@ const styles = StyleSheet.create({
   summarySegTime: { fontSize: 14, fontWeight: '600', color: colors.ink, marginBottom: 2 },
   summarySegMode: { fontSize: 13, color: colors.slate },
   fieldRow: { flexDirection: 'row', gap: 10 },
+  duration: { fontSize: 13, color: colors.ink, fontWeight: '600', marginTop: -2 },
   segBar: { borderLeftWidth: 3, borderLeftColor: colors.court, paddingLeft: 12, marginBottom: 4 },
   smallLabel: { fontSize: 11.5, color: colors.slate, fontWeight: '600', textTransform: 'uppercase', marginBottom: 6 },
   courtModeList: { gap: 8 },

@@ -5,7 +5,7 @@ import { SectionTitle, Card, Btn, Banner, Badge, BigNum, GenderDot, Hint, Select
 import { isBookingPlanStale, fmtClock, offsetToClock } from '../../lib/engine';
 import {
   recalcBooking, claimSlot, confirmSlot, releaseSlot, getPlayerById, playerName, playerGender,
-  slotLabel, updateSlotName, useStore,
+  slotLabel, updateSlotName, useStore, playerBlurb,
 } from '../../lib/store';
 import { colors, radius } from '../../lib/theme';
 
@@ -112,7 +112,7 @@ export default function BookingStep({ ev }) {
                   <Select
                     disabled={locked}
                     value={claimPicks[s.id] || ''} onValueChange={(v) => setClaimPicks({ ...claimPicks, [s.id]: v })}
-                    placeholder="Claim as…" items={members.map(p => ({ label: `${p.name} (${p.gender})`, value: p.id }))}
+                    placeholder="Claim as…" items={members.map(p => ({ label: p.name, value: p.id, description: playerBlurb(p) }))}
                     style={{ flex: 0, width: 150 }}
                   />
                   <Btn title="Claim" small disabled={locked} onPress={() => { const v = claimPicks[s.id]; if (v) claimSlot(ev, s.id, v); }} />
