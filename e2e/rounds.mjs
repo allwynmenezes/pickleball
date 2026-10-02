@@ -33,10 +33,10 @@ const step = async (name, fn) => {
     await page.screenshot({ path: `screenshots/FAILED-rounds-${failures}.png` }).catch(() => {});
   }
 };
-async function openAs(meId, stepName) {
+async function openAs(meId, stepName, ev = baseEvent()) {
   if (page) await page.close();
   const me = players.find(p => p.id === meId);
-  let state = { players, events: [baseEvent()], chats: [], history: {}, flagThreshold: 3, currentEventId: null };
+  let state = { players, events: [ev], chats: [], history: {}, flagThreshold: 3, currentEventId: null };
   page = await browser.newPage({ viewport: { width: 412, height: 915 } });
   puts = [];
   page.on('pageerror', e => errors.push(String(e)));
@@ -102,6 +102,34 @@ await openAs('host1', 'setup');
 await step('Setup summary shows the Standings choice', async () => {
   await shown('Standings');
   await shown('Win %');
+});
+
+// A break on every court from 6:15 to 6:45: the roster's two empty rounds
+// there show as one Break row, and don't count as rounds.
+const withBreak = () => ({
+  ...baseEvent(), published: false, currentRoundIndex: 0,
+  segments: [
+    { start: '18:00', end: '18:15', modes: {} },
+    { start: '18:15', end: '18:45', modes: { 1: 'break', 2: 'break' } },
+    { start: '18:45', end: '19:00', modes: {} },
+  ],
+  roster: [
+    { offset: 0, len: 15, courts: [court(1, ['host1', 'p2'], ['p3', 'p4']), court(2, ['p5', 'p6'], ['p7', 'p8'])], sitOut: [] },
+    { offset: 15, len: 15, courts: [], sitOut: [] },
+    { offset: 30, len: 15, courts: [], sitOut: [] },
+    { offset: 45, len: 15, courts: [court(1, ['host1', 'p3'], ['p5', 'p7']), court(2, ['p2', 'p4'], ['p6', 'p8'])], sitOut: [] },
+  ],
+});
+await openAs('host1', 'roster', withBreak());
+await step('roster: a break shows as one "Break" row, not empty rounds', async () => {
+  await shown('6:15pm – 6:45pm · Break');
+  assert.equal(await page.getByText('6:15pm – 6:45pm · Break', { exact: true }).filter({ visible: true }).count(), 1);
+  for (const t of ['6:15pm', '6:30pm']) assert.equal(await page.getByText(t, { exact: true }).filter({ visible: true }).count(), 0, `no empty round at ${t}`);
+  await shown('6:45pm');
+  // Overview: 2 game rounds (the break isn't counted).
+  await page.getByText(/^rounds \(/).filter({ visible: true }).first().waitFor();
+  const overview = await page.getByText('games scheduled', { exact: true }).filter({ visible: true }).first().evaluate(el => el.parentElement.parentElement.innerText);
+  assert.match(overview, /^4\s+games scheduled\s+2\s+rounds/, overview);
 });
 await step('no errors on the page', async () => assert.deepEqual(errors, []));
 

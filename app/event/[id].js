@@ -223,10 +223,20 @@ export default function EventFlowScreen() {
   // (the server leaves those open too).
   const canRun = !ev.createdBy || canEdit;
 
-  function onEdit() {
+  function startEditing() {
+    if (editing) return;
     checkpointEventFlow(ev.id);
     setEditing(true);
+  }
+  function onEdit() {
+    startEditing();
     goToStep('setup');
+  }
+  // The assistant changes the event, so it works in edit mode too: its
+  // changes are kept with Save or undone with Cancel.
+  function openAssistant() {
+    startEditing();
+    setAiOpen(true);
   }
 
   function renderStep(key) {
@@ -278,7 +288,7 @@ export default function EventFlowScreen() {
           {/* The assistant, on every step — for the host, until games start. */}
           {canEdit && !ev.started ? (
             <Pressable
-              onPress={() => setAiOpen(true)}
+              onPress={openAssistant}
               style={({ pressed }) => [styles.aiBtn, pressed && styles.aiBtnPressed]}
               accessibilityRole="button" accessibilityLabel="Open the assistant"
             >

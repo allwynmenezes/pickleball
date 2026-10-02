@@ -2,7 +2,7 @@
    fair sitting out, court types, warm-up repeat, partial RSVPs, kept rounds,
    and speed. Run with `npm test` from the project root. */
 import assert from 'node:assert/strict';
-import { generateRoster, pairKey, isPastEvent, splitEventsByTime, localDateStr, eventStatus, segmentsWithBreak } from '../lib/engine.js';
+import { generateRoster, pairKey, isPastEvent, splitEventsByTime, localDateStr, eventStatus, segmentsWithBreak, isBreakRound, minutesBetween, fmtDuration } from '../lib/engine.js';
 
 let failures = 0;
 const check = (name, fn) => {
@@ -216,6 +216,25 @@ check('32 players on 8 courts, 4 hours, in under half a second', () => {
   event({ n: 32, courts: 8, genders: 'MF', modes: { 1: 'mixed', 2: 'mixed', 3: 'men', 4: 'women' } });
   const ms = Date.now() - t;
   assert.ok(ms < 500, `${ms} ms`);
+});
+
+check('break rounds: a break on every court gives empty rounds that isBreakRound picks out', () => {
+  const { ev, players } = event({ n: 8, courts: 2 });
+  ev.segments = segmentsWithBreak(ev, 60, 30);
+  const rounds = generateRoster(ev, {}, 0, players);
+  const breaks = rounds.filter(r => isBreakRound(ev, r)).map(r => r.offset);
+  assert.deepEqual(breaks, [60, 75]);
+  assert.ok(rounds.filter(r => !isBreakRound(ev, r)).every(r => r.courts.length === 2), 'every other round has games');
+  // One court resting is not a break round.
+  const { ev: ev2, players: p2 } = event({ n: 8, courts: 2, modes: { 1: 'break' } });
+  assert.ok(generateRoster(ev2, {}, 0, p2).every(r => !isBreakRound(ev2, r)));
+});
+check('event times: end time to duration, shown in hours and minutes', () => {
+  assert.equal(minutesBetween('18:00', '21:30'), 210);
+  assert.equal(minutesBetween('22:00', '01:00'), 180, 'past midnight');
+  assert.equal(fmtDuration(210), '3 hr 30 min');
+  assert.equal(fmtDuration(120), '2 hr');
+  assert.equal(fmtDuration(45), '45 min');
 });
 
 if (failures) { console.error(`\n${failures} failed`); process.exit(1); }

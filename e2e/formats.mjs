@@ -49,29 +49,45 @@ async function openAs(meId, events, path) {
 }
 const shown = (text, timeout = 8000) => page.getByText(text, { exact: true }).filter({ visible: true }).first().waitFor({ timeout });
 const saved = (id = 'e1') => server.events.find(e => e.id === id);
-const selectNear = label => page.locator('select').filter({ visible: true }).filter({ has: page.locator(`option:text-is("${label}")`) }).first();
+// Dropdowns open the app's own list (lib/ui.js Select): the field is
+// labelled "<label>: <current value>"; its options sit in a dialog.
+const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const field = label => page.getByLabel(new RegExp(`^${esc(label)}: `)).filter({ visible: true }).first();
+const dialog = () => page.locator('[role="dialog"]').last();
+const choose = async (label, option) => {
+  await field(label).click();
+  await dialog().getByText(option, { exact: true }).first().click();
+  await page.waitForTimeout(400);
+};
+const optionsOf = async label => {
+  await field(label).click();
+  await dialog().getByText('Cancel', { exact: true }).waitFor();
+  const texts = await dialog().getByRole('button').allInnerTexts();
+  await dialog().getByText('Cancel', { exact: true }).click();
+  await page.waitForTimeout(300);
+  return texts.map(t => t.split('\n')[0].trim()).filter(t => t && t !== 'Cancel');
+};
 const confirmModal = async (label) => { await page.getByText(label, { exact: true }).filter({ visible: true }).last().click(); await page.waitForTimeout(500); };
 const score = label => page.getByLabel(label, { exact: true }).filter({ visible: true }).first();
 
 console.log('formats');
 await openAs('host1', [baseEvent()], '/event/e1?step=setup');
 await step('choosing a format in Setup fills in its options', async () => {
-  await page.getByText('Edit', { exact: true }).filter({ visible: true }).first().click();
+  await page.getByText('Edit', { exact: true }).filter({ visible: true }).last().click();
   await shown('Format & options');
-  await selectNear('King of the Court (Claim the Throne)').selectOption({ label: 'King of the Court (Claim the Throne)' });
-  await page.waitForTimeout(600);
+  await choose('Format', 'King of the Court (Claim the Throne)');
+  await page.waitForTimeout(200);
   const o = saved().options;
   assert.deepEqual([o.format, o.movement, o.standings, o.extras], ['kingOfCourt', 'game', 'courtPoints', 'rotate']);
   await shown('Court movement');
 });
 await step('changing one option makes the format "Custom"', async () => {
-  await selectNear('By DUPR rating').selectOption({ label: 'By DUPR rating' });
-  await page.waitForTimeout(600);
+  await choose('Seeding — where the first round starts', 'By DUPR rating');
+  await page.waitForTimeout(200);
   assert.deepEqual([saved().options.format, saved().options.seeding], ['custom', 'dupr']);
 });
 await step('fixed pairs: tap two players to pair them', async () => {
-  await selectNear('Fixed pairs').selectOption({ label: 'Fixed pairs' });
-  await page.waitForTimeout(400);
+  await choose('Partners', 'Fixed pairs');
   await page.getByLabel('Pair Ben Brown', { exact: true }).click();
   await page.getByLabel('Pair Cara Cole', { exact: true }).click();
   await page.waitForTimeout(600);
@@ -83,8 +99,9 @@ await step('fixed pairs: tap two players to pair them', async () => {
   await page.waitForTimeout(600);
   assert.equal(saved().options.pairs.length, 3);
 });
-await step('the summary shows the format', async () => {
-  await page.getByText('Done', { exact: true }).filter({ visible: true }).first().click();
+await step('Save keeps the edits and the summary shows the format', async () => {
+  await page.getByText('Save', { exact: true }).filter({ visible: true }).last().click();
+  await shown('View mode');
   await shown('Custom');
   await shown('How it plays');
 });

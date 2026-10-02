@@ -56,33 +56,48 @@ async function openAs(meId, events, path) {
 const shown = (text, timeout = 8000) => page.getByText(text, { exact: true }).filter({ visible: true }).first().waitFor({ timeout });
 const visibleCount = text => page.getByText(text, { exact: true }).filter({ visible: true }).count();
 const saved = (id = 'e1') => server.events.find(e => e.id === id);
-const selectWith = label => page.locator('select').filter({ visible: true }).filter({ has: page.locator(`option:text-is("${label}")`) });
-const selectNear = label => selectWith(label).first();
+// Dropdowns open the app's own list (lib/ui.js Select): the field is
+// labelled "<label>: <current value>"; its options sit in a dialog.
+const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const field = label => page.getByLabel(new RegExp(`^${esc(label)}: `)).filter({ visible: true }).first();
+const dialog = () => page.locator('[role="dialog"]').last();
+const choose = async (label, option) => {
+  await field(label).click();
+  await dialog().getByText(option, { exact: true }).first().click();
+  await page.waitForTimeout(400);
+};
+const optionsOf = async label => {
+  await field(label).click();
+  await dialog().getByText('Cancel', { exact: true }).waitFor();
+  const texts = await dialog().getByRole('button').allInnerTexts();
+  await dialog().getByText('Cancel', { exact: true }).click();
+  await page.waitForTimeout(300);
+  return texts.map(t => t.split('\n')[0].trim()).filter(t => t && t !== 'Cancel');
+};
 const confirmModal = async label => { await page.getByText(label, { exact: true }).filter({ visible: true }).last().click(); await page.waitForTimeout(500); };
 const byLabel = label => page.getByLabel(label, { exact: true }).filter({ visible: true }).first();
-const pick = async (optionLabel) => { await selectNear(optionLabel).selectOption({ label: optionLabel }); await page.waitForTimeout(400); };
+const SEEDING = 'Seeding — where the first round starts';
 
 /* ------------------------------------------------------------------ */
 console.log('QA 7 · Setup option controls show and hide (FR-1)');
 await openAs('host1', [baseEvent()], '/event/e1?step=setup');
 await step('defaults: no pairs editor, no seed editor, movement offers "after every game", no playoff sub-options', async () => {
-  await page.getByText('Edit', { exact: true }).filter({ visible: true }).first().click();
+  await page.getByText('Edit', { exact: true }).filter({ visible: true }).last().click();
   await shown('Format & options');
   assert.equal(await page.getByText(/^Pairs \(\d+\)$/).filter({ visible: true }).count(), 0, 'pairs editor');
   assert.equal(await page.getByLabel(/^Move .* up$/).filter({ visible: true }).count(), 0, 'seed editor');
-  assert.equal(await selectWith('After every game: winners up, losers down').count(), 1);
-  assert.equal(await selectWith("After each group's 3 games: top 2 up, bottom 2 down").count(), 0);
+  assert.deepEqual(await optionsOf('Court movement'), ['None', 'After every game: winners up, losers down']);
   assert.equal(await visibleCount('Teams in the playoffs'), 0);
   assert.equal(await visibleCount('Seed the playoffs from'), 0);
 });
 await step('fixed pairs shows the pairs editor; rotating hides it', async () => {
-  await pick('Fixed pairs');
+  await choose('Partners', 'Fixed pairs');
   await page.getByText(/^Pairs \(\d+\)$/).filter({ visible: true }).first().waitFor({ timeout: 3000 });
-  await pick('Rotating partners');
+  await choose('Partners', 'Rotating partners');
   assert.equal(await page.getByText(/^Pairs \(\d+\)$/).filter({ visible: true }).count(), 0);
 });
 await step('manual seeding shows the seed editor; up/down reorder options.seedOrder', async () => {
-  await pick('Manual order');
+  await choose(SEEDING, 'Manual order');
   await byLabel('Move Ben Brown up').waitFor({ timeout: 3000 });
   await byLabel('Move Ben Brown up').click();
   await page.waitForTimeout(500);
@@ -93,49 +108,42 @@ await step('manual seeding shows the seed editor; up/down reorder options.seedOr
   await byLabel('Move Ben Brown up').click(); // already first: no change
   await page.waitForTimeout(400);
   assert.equal(saved().options.seedOrder[0], 'p2');
-  await pick('By DUPR rating');
+  await choose(SEEDING, 'By DUPR rating');
   assert.equal(await page.getByLabel(/^Move .* up$/).filter({ visible: true }).count(), 0);
 });
 await step('groups on: movement offers "after each group\'s 3 games" instead of "after every game"', async () => {
-  await pick('Groups of 4 for 3 games');
-  assert.equal(await selectWith("After each group's 3 games: top 2 up, bottom 2 down").count(), 1);
-  assert.equal(await selectWith('After every game: winners up, losers down').count(), 0);
-  await pick("After each group's 3 games: top 2 up, bottom 2 down");
+  await choose('Court groups', 'Groups of 4 for 3 games');
+  assert.deepEqual(await optionsOf('Court movement'), ['None', "After each group's 3 games: top 2 up, bottom 2 down"]);
+  await choose('Court movement', "After each group's 3 games: top 2 up, bottom 2 down");
   assert.equal(saved().options.movement, 'set');
 });
 await step('groups off with set movement: movement becomes "after every game" (normalised)', async () => {
-  await pick('Mix everyone');
+  await choose('Court groups', 'Mix everyone');
   assert.equal(saved().options.movement, 'game');
-  assert.equal(await selectWith('After every game: winners up, losers down').count(), 1);
-  await pick('None');
+  assert.deepEqual(await optionsOf('Court movement'), ['None', 'After every game: winners up, losers down']);
+  await choose('Court movement', 'None');
 });
 await step('playoffs: sub-options appear; 3rd place only for single; no size 2 for double; "Seed from" only for series', async () => {
-  await selectNear('Single elimination').selectOption({ label: 'Single elimination' });
-  await page.waitForTimeout(400);
+  await choose('Playoffs', 'Single elimination');
   await shown('Teams in the playoffs');
   await shown('Play a 3rd-place match');
   assert.equal(await visibleCount('Seed the playoffs from'), 0);
-  await selectNear('Double elimination').selectOption({ label: 'Double elimination' });
-  await page.waitForTimeout(400);
+  await choose('Playoffs', 'Double elimination');
   assert.equal(await visibleCount('Play a 3rd-place match'), 0);
-  const sizes = await selectNear('8').locator('option').allTextContents();
+  const sizes = await optionsOf('Teams in the playoffs');
   assert.ok(!sizes.includes('2'), `sizes: ${sizes}`);
-  await pick('Weekly series (season standings)');
+  await choose('Repeat', 'Weekly series (season standings)');
   await shown('Seed the playoffs from');
-  await pick('One-off');
+  await choose('Repeat', 'One-off');
   assert.equal(await visibleCount('Seed the playoffs from'), 0);
-  await selectNear('Double elimination').selectOption({ label: 'None' }).catch(async () => {
-    // Several selects have "None" — pick the playoffs one by its other options.
-    await page.locator('select').filter({ visible: true }).filter({ has: page.locator('option:text-is("Double elimination")') }).first().selectOption({ label: 'None' });
-  });
-  await page.waitForTimeout(400);
+  await choose('Playoffs', 'None');
   assert.equal(await visibleCount('Teams in the playoffs'), 0);
 });
 await step('no games (clinic) hides partners, seeding, groups, movement, standings and playoffs', async () => {
-  await pick('No games (clinic / lesson)');
+  await choose('Games', 'No games (clinic / lesson)');
   for (const t of ['Partners', 'Court groups', 'Court movement', 'Standings', 'Playoffs']) assert.equal(await visibleCount(t), 0, t);
   await shown('Repeat');
-  await pick('Scheduled games');
+  await choose('Games', 'Scheduled games');
   await shown('Partners');
 });
 await step('every option change is saved at once; format becomes Custom', async () => {
@@ -156,7 +164,7 @@ await step('a Rounds link to a clinic opens safely (PRD says it explains "no gam
   // components/eventSteps/RoundsStep.js:24 has the "no games" text, but
   // app/event/[id].js:171 drops the step, so the link falls back to Setup.
   const noGames = page.getByText(/This event has no games/).filter({ visible: true }).first();
-  const setup = page.getByText('Event setup', { exact: true }).filter({ visible: true }).first();
+  const setup = page.getByText('View mode', { exact: true }).filter({ visible: true }).first();
   await Promise.race([noGames.waitFor({ timeout: 8000 }), setup.waitFor({ timeout: 8000 })]);
 });
 

@@ -103,14 +103,17 @@ await step('Past events collapses and expands', async () => {
 });
 
 console.log('Event screen layout');
-await step('steps are a numbered indicator on top; name and actions at the bottom', async () => {
+await step('steps are a numbered indicator on top; name, mode and actions at the bottom', async () => {
   await page.getByText('League Night').first().click();
   const stepOne = page.getByLabel('Step 1 of 6: Setup');
   await stepOne.waitFor({ timeout: 10000 });
-  const save = page.getByText('Save', { exact: true }).last();
-  const [s1, sv] = [await stepOne.boundingBox(), await save.boundingBox()];
+  // An event opens in view mode: Close and Edit, no Save yet.
+  const edit = page.getByText('Edit', { exact: true }).last();
+  const [s1, ed] = [await stepOne.boundingBox(), await edit.boundingBox()];
   assert.ok(s1.y < 250, `steps near the top (y=${s1.y})`);
-  assert.ok(sv.y > 915 - 110, `Save at the bottom (y=${sv.y})`);
+  assert.ok(ed.y > 915 - 110, `Edit at the bottom (y=${ed.y})`);
+  await page.getByText('View mode', { exact: true }).waitFor();
+  assert.equal(await page.getByText('Save', { exact: true }).filter({ visible: true }).count(), 0, 'no Save in view mode');
   await page.screenshot({ path: `${SHOTS}/a0-event-layout.png` });
 });
 await step('a break segment is highlighted in mint', async () => {
@@ -120,28 +123,28 @@ await step('a break segment is highlighted in mint', async () => {
   assert.equal(bg, 'rgb(231, 253, 247)', 'break segment sits on the mint tint');
   await page.getByText('No games on any court.').waitFor();
 });
-await step('Add break: start and length default sensibly; the end time is shown; the break is carved in', async () => {
-  // Leave League Night (nothing changed) and open the plain draft.
-  await page.getByText('Save', { exact: true }).last().click();
+await step('Add break: one tap adds a 15-minute break on the hour mark, with its times right there', async () => {
+  // Leave League Night (view mode: Close asks nothing) and open the plain draft.
+  await page.getByText('Close', { exact: true }).last().click();
   await page.waitForTimeout(1000);
   await page.getByText('Draft Session').click();
-  await page.getByText('Edit', { exact: true }).click();
+  await page.getByText('Edit', { exact: true }).last().click();
+  await page.getByText('Edit mode', { exact: true }).waitFor({ timeout: 5000 });
   await page.getByText('Add game segment').waitFor({ timeout: 5000 });
   await page.getByText('Add break', { exact: true }).first().click();
-  await page.getByText('Add a break').waitFor();
-  await page.getByText(/Break from 7pm to/).waitFor();
-  assert.ok(await page.getByText('7:15pm', { exact: true }).count(), 'end time shown');
+  await page.getByText('No games on any court from 7pm to 7:15pm.').waitFor({ timeout: 5000 });
+  await page.getByText(/^To rest just one court/).first().waitFor();
   await page.screenshot({ path: `${SHOTS}/a0-add-break.png`, fullPage: true });
-  await page.getByText('Add break', { exact: true }).last().click();
-  await page.waitForTimeout(300);
   await page.getByText('Save', { exact: true }).last().click();
   await page.waitForTimeout(800);
+  await page.getByText('View mode', { exact: true }).waitFor({ timeout: 5000 });
   const ev = lastPutEvent('draft1');
   assert.deepEqual(ev.segments.map(x => `${x.start}-${x.end} ${JSON.stringify(x.modes)}`), [
     '18:00-19:00 {}',
     '19:00-19:15 {"1":"break","2":"break","3":"break"}',
     '19:15-21:00 {}',
   ]);
+  await page.getByText('Close', { exact: true }).last().click();
   await page.waitForTimeout(1000);
 });
 
@@ -171,7 +174,10 @@ await step('a description becomes a message with the assistant\'s reply, and fil
   const list = await page.getByText('Friday 7 to 9pm, 8 players', { exact: false }).evaluate(el => { let n = el; while (n && !(n.scrollHeight && getComputedStyle(n).overflowY !== 'visible' && getComputedStyle(n).height === '260px')) n = n.parentElement; return n ? n.getBoundingClientRect().height : null; });
   assert.equal(Math.round(list), 260, 'the chat sits in a fixed-height scroll area');
   const values = await page.locator('input').evaluateAll(els => els.map(e => e.value));
-  assert.ok(values.includes('Friday Mixer') && values.includes('12') && values.includes('2') && values.includes('120'), JSON.stringify(values));
+  assert.ok(values.includes('Friday Mixer') && values.includes('12') && values.includes('2'), JSON.stringify(values));
+  // 7 to 9pm: shown as start and end times, with the length worked out.
+  await page.getByText('9pm', { exact: true }).waitFor();
+  await page.getByText('Duration: 2 hr', { exact: true }).waitFor();
   await page.screenshot({ path: `${SHOTS}/a2-new-event.png`, fullPage: true });
 });
 await step('a follow-up changes the form instead of starting over', async () => {
@@ -186,6 +192,8 @@ await step('a follow-up changes the form instead of starting over', async () => 
 let newId;
 await step('Create keeps the conversation with the event', async () => {
   await page.getByText('Create event', { exact: true }).click();
+  // A new event opens in edit mode; Save keeps it and switches to view mode.
+  await page.getByText('Edit mode', { exact: true }).waitFor({ timeout: 5000 });
   await page.getByText('Save', { exact: true }).click();
   await page.waitForTimeout(800);
   const ev = puts[puts.length - 1].events.find(e => e.name === 'Friday Mixer');
@@ -193,6 +201,9 @@ await step('Create keeps the conversation with the event', async () => {
   newId = ev.id;
   assert.deepEqual(ev.aiMessages.map(m => m.role), ['user', 'assistant', 'user', 'assistant']);
   assert.equal(ev.gameLenMin, 20);
+  assert.equal(ev.durationMin, 120);
+  await page.getByText('Close', { exact: true }).last().click();
+  await page.waitForTimeout(1000);
 });
 
 await step("a first message that isn't a description changes the form", async () => {
@@ -227,7 +238,11 @@ await step('something that isn\'t a change gets a reply, kept in the chat', asyn
   await page.getByText(/doesn't look like a change/).waitFor({ timeout: 10000 });
 });
 await step('Save keeps the change and the whole conversation', async () => {
-  await page.getByLabel('Close', { exact: true }).click();
+  // Opening the assistant put the event in edit mode, so its changes are
+  // kept with Save, like any other edit.
+  await page.getByLabel('Close', { exact: true }).last().click();
+  await page.waitForTimeout(400);
+  await page.getByText('Edit mode', { exact: true }).waitFor();
   await page.getByText('Save', { exact: true }).click();
   await page.waitForTimeout(800);
   const ev = lastPutEvent(newId);
@@ -235,12 +250,29 @@ await step('Save keeps the change and the whole conversation', async () => {
   assert.ok(ev.memberIds.includes('p3'));
   assert.deepEqual(ev.aiMessages.map(m => m.role), ['user', 'assistant', 'user', 'assistant', 'user', 'assistant', 'user', 'assistant']);
   assert.equal(editCalls, 4); // 2 form changes on New event + 2 in the event's assistant
+  await page.getByText('Close', { exact: true }).last().click();
+  await page.waitForTimeout(1000);
 });
 await step('the assistant is on every step (e.g. Roster)', async () => {
   await page.getByText('Friday Mixer').first().click();
   await page.getByText('Roster', { exact: true }).click();
   await page.getByLabel('Open the assistant').waitFor({ timeout: 5000 });
-  await page.getByText('Cancel', { exact: true }).first().click();
+  await page.getByText('Close', { exact: true }).last().click();
+  await page.waitForTimeout(800);
+});
+await step('Cancel undoes what the assistant changed', async () => {
+  await page.getByText('Friday Mixer').first().click();
+  await page.getByLabel('Open the assistant').click();
+  await page.getByLabel('Message the assistant').last().fill('update the game length');
+  await page.getByLabel('Send').last().click();
+  await page.getByText(/Games 20 → 20 min\. Tap Save/).waitFor({ timeout: 10000 });
+  await page.getByLabel('Close', { exact: true }).last().click();
+  await page.waitForTimeout(400);
+  await page.getByText('Cancel', { exact: true }).last().click();
+  await page.getByText('Discard', { exact: true }).click();
+  await page.getByText('View mode', { exact: true }).waitFor({ timeout: 5000 });
+  await page.waitForTimeout(800);
+  assert.equal(lastPutEvent(newId).aiMessages.length, 8, 'the discarded exchange is gone too');
 });
 
 await step('no errors on the page', async () => assert.deepEqual(errors, []));
