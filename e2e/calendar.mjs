@@ -30,7 +30,7 @@ const step = async (name, fn) => {
   }
 };
 // A finger drag across the calendar grid: press on a day, move in steps, release.
-async function swipe(dx, { steps = 12, anchor = '15' } = {}) {
+async function swipe(dx, { anchor = '15', slow = false } = {}) {
   // The neighbouring months sit just off-screen either side (clipped) and
   // the screen underneath stays mounted, so use the copy of the day that is
   // actually on top at its own position — what a finger would touch.
@@ -44,9 +44,32 @@ async function swipe(dx, { steps = 12, anchor = '15' } = {}) {
     if (onTop) { box = await l.boundingBox(); break; }
   }
   const x = box.x + box.width / 2, y = box.y + box.height / 2;
+  // Keep the drag over the calendar card. With a mouse on the web build, a
+  // drag released past the card's edge (x < ~30) is dropped and leaves the
+  // next swipe swallowed too; touch on a phone doesn't do this. Where the
+  // anchor day sits depends on today's date, so clamp rather than trust dx.
+  const width = page.viewportSize().width;
+  dx = Math.max(44 - x, Math.min(width - 44 - x, dx));
+  // On the web build the calendar decides "is this a sideways drag?" on the
+  // first move only (over 12px), so move in ~20px steps like a real flick
+  // rather than a fixed number of steps that can make the first one tiny.
+  const steps = Math.max(2, Math.round(Math.abs(dx) / 20));
   await page.mouse.move(x, y);
   await page.mouse.down();
-  for (let i = 1; i <= steps; i++) await page.mouse.move(x + (dx * i) / steps, y + i * 0.3);
+  if (slow) {
+    // A deliberate drag, not a flick: one clear sideways move, then small
+    // slow ones, so the release speed stays under the flick threshold.
+    const dir = Math.sign(dx), first = 14 * dir;
+    await page.mouse.move(x + first, y);
+    for (let moved = first; Math.abs(moved) < Math.abs(dx);) {
+      moved += 4 * dir;
+      await page.waitForTimeout(40);
+      await page.mouse.move(x + moved, y);
+    }
+    await page.waitForTimeout(200);
+  } else {
+    for (let i = 1; i <= steps; i++) await page.mouse.move(x + (dx * i) / steps, y + i * 0.3);
+  }
   await page.mouse.up();
   await page.waitForTimeout(500); // slide animation
 }
@@ -72,7 +95,7 @@ await step('scrolling moves the lists; the calendar stays put', async () => {
 });
 await step('swipe left shows the next month', async () => { await swipe(-260); await shown(monthLabel(1)); });
 await step('swipe right twice goes back two months', async () => { await swipe(260); await swipe(260); await shown(monthLabel(-1)); });
-await step('a short drag springs back to the same month', async () => { await swipe(-50); await shown(monthLabel(-1)); });
+await step('a short drag springs back to the same month', async () => { await swipe(-50, { slow: true }); await shown(monthLabel(-1)); });
 await step('the arrows still change month', async () => {
   await page.getByLabel('Next month').click(); await page.waitForTimeout(400); await shown(monthLabel(0));
   await page.getByLabel('Next month').click(); await page.waitForTimeout(400); await shown(monthLabel(1));

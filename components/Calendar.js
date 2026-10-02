@@ -87,6 +87,11 @@ export default function Calendar({ cursor, onShift, events, selectedDate, onSele
   const animating = useRef(false);
   const resetAfterShift = useRef(false);
   const latest = useRef({});
+  /* On the web a drag that ends over the day it started on also counts as
+     a click on that day (the grid moves with the pointer), which picked
+     the day and closed the date picker. A tap that lands as a drag ends is
+     part of the drag, not a choice. Touch on a phone cancels the tap. */
+  const dragEndedAt = useRef(0);
   latest.current = { width, onShift };
 
   // After the parent moves to the new month, put the strip back in the
@@ -122,17 +127,20 @@ export default function Calendar({ cursor, onShift, events, selectedDate, onSele
   const pan = useRef(PanResponder.create({
     onMoveShouldSetPanResponder: (_, g) => !animating.current && Math.abs(g.dx) > 12 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
     onPanResponderTerminationRequest: () => false,
+    onPanResponderGrant: () => { dragEndedAt.current = Infinity; },
     onPanResponderMove: (_, g) => drag.setValue(g.dx),
     onPanResponderRelease: (_, g) => {
+      dragEndedAt.current = Date.now();
       const w = latest.current.width || 1;
       if (g.dx < -w * SWIPE_DISTANCE || g.vx < -SWIPE_VELOCITY) slideTo(1, Math.abs(g.vx));
       else if (g.dx > w * SWIPE_DISTANCE || g.vx > SWIPE_VELOCITY) slideTo(-1, Math.abs(g.vx));
       else springBack();
     },
-    onPanResponderTerminate: () => springBack(),
+    onPanResponderTerminate: () => { dragEndedAt.current = Date.now(); springBack(); },
   })).current;
 
-  const gridProps = { eventsByDate, todayStr, selectedDate, onSelectDate };
+  const selectDay = (d) => { if (Date.now() - dragEndedAt.current > 300) onSelectDate(d); };
+  const gridProps = { eventsByDate, todayStr, selectedDate, onSelectDate: selectDay };
   return (
     <View>
       <View style={styles.head}>

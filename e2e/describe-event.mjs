@@ -41,29 +41,32 @@ const step = async (name, fn) => {
 await page.goto(APP + '/');
 await page.waitForTimeout(1500);
 await page.goto(APP + '/event/new');
-const box = page.getByLabel('Describe your event');
+// "Describe your event" is a chat with the assistant (components/AiEventComposer.js).
+const box = page.getByLabel('Message the assistant');
+const send = async (msg) => { await box.fill(msg); await page.getByLabel('Send').click(); };
 
 await step('the describe box is shown on the new-event screen', async () => {
-  await box.waitFor({ timeout: 15000 });
+  await page.getByText('Describe your event', { exact: true }).waitFor({ timeout: 15000 });
+  await box.waitFor({ timeout: 5000 });
   await page.screenshot({ path: `${SHOTS}/1-empty.png` });
 });
 
 await step('an off-topic request shows a helpful message and fills nothing', async () => {
-  await box.fill('can you remind me to buy milk');
-  await page.getByText('Fill in form').click();
-  await page.getByText("Couldn't find event details").waitFor({ timeout: 30000 });
+  await send('can you remind me to buy milk');
+  await page.getByText(/Couldn't find event details/).waitFor({ timeout: 30000 });
   assert.equal(await page.getByLabel('Event name').inputValue().catch(() => page.locator('input').first().inputValue()), '');
 });
 
 const text = 'Next Tuesday 6 to 9pm, 3 courts, 12 minute games, mixed for the first hour then open, add Cleo, Dev and Priya';
 await step('a description fills in the form', async () => {
-  await box.fill(text);
-  await page.getByText('Fill in form').click();
+  await send(text);
   await page.getByText(/^Filled in /).waitFor({ timeout: 30000 });
   await page.screenshot({ path: `${SHOTS}/2-filled.png`, fullPage: true });
   const inputs = await page.locator('input').evaluateAll(els => els.map(e => e.value));
-  assert.ok(inputs.includes('180'), `duration 180 in ${JSON.stringify(inputs)}`);
   assert.ok(inputs.includes('3'), `courts 3 in ${JSON.stringify(inputs)}`);
+  // 6 to 9pm shows as start and end times, with the length worked out.
+  await page.getByText('9pm', { exact: true }).waitFor();
+  await page.getByText('Duration: 3 hr', { exact: true }).waitFor();
 });
 
 await step('an unknown player name is flagged, not guessed', async () => {
@@ -72,9 +75,11 @@ await step('an unknown player name is flagged, not guessed', async () => {
 
 await step('Create event opens the event, and Save stores it', async () => {
   await page.getByText('Create event', { exact: true }).click();
-  await page.getByText('Save', { exact: true }).waitFor({ timeout: 10000 });
+  // A new event opens in edit mode; Save keeps it and switches to view mode.
+  await page.getByText('Edit mode', { exact: true }).waitFor({ timeout: 10000 });
   await page.screenshot({ path: `${SHOTS}/3-setup.png`, fullPage: true });
   await page.getByText('Save', { exact: true }).click();
+  await page.getByText('View mode', { exact: true }).waitFor({ timeout: 5000 });
   await page.waitForTimeout(2500); // state sync to the server
 });
 
