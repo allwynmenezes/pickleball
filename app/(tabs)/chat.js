@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, Platform, KeyboardAvoidingView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Screen, SectionTitle, Card, Btn, Row, EmptyState, Hint, GenderDot, Pill, TextField } from '../../lib/ui';
+import { Screen, SectionTitle, Card, Btn, Row, EmptyState, Hint, GenderDot, Pill, TextField, IconBtn } from '../../lib/ui';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   useStore, startChat, sendChatMessage, playerName, playerGender,
+  renameChat, ensureEventChat, eventChatId, eventChatMembers, eventChatDefaultName,
 } from '../../lib/store';
 import { useAuth } from '../../lib/auth';
 import { useSocial } from '../../lib/social';
@@ -17,11 +18,32 @@ export default function ChatScreen() {
   const router = useRouter();
   const players = useStore(s => s.players);
   const allChats = useStore(s => s.chats);
-  // You always chat as the logged-in account, and only see your own chats.
+  const events = useStore(s => s.events);
+  // You always chat as the logged-in account, and only see your own chats —
+  // plus the group chat of every event you're in that has one turned on
+  // (made the first time someone opens it).
   const { player: me } = useAuth();
   const asIdLive = me ? me.id : null;
-  const chats = allChats.filter(c => c.participantIds.includes(asIdLive));
-  const [activeChatId, setActiveChatId] = useState(null);
+  const eventById = id => events.find(e => e.id === id);
+  const chats = [
+    ...allChats.filter(c => !c.eventId && c.participantIds.includes(asIdLive)),
+    ...events.filter(ev => ev.groupChat && asIdLive && eventChatMembers(ev).includes(asIdLive)).map(ev => (
+      allChats.find(c => c.id === eventChatId(ev))
+      || { id: eventChatId(ev), type: 'group', eventId: ev.id, name: '', participantIds: eventChatMembers(ev), messages: [] }
+    )),
+  ];
+  const titleOf = (c) => {
+    if (c.eventId) { const ev = eventById(c.eventId); return c.name || (ev ? eventChatDefaultName(ev) : 'Event chat'); }
+    const others = c.participantIds.filter(id => id !== asIdLive).map(playerName);
+    return c.type === 'group' ? (c.name || others.join(', ')) : (others[0] || 'Chat');
+  };
+  const openChat = (c) => {
+    if (c.eventId) { const ev = eventById(c.eventId); if (ev) ensureEventChat(ev); }
+    setActiveChatId(c.id);
+  };
+  const [renaming, setRenaming] = useState(null); // the new group name being typed, or null
+  const [activeChatId, setActiveChatIdRaw] = useState(null);
+  const setActiveChatId = (id) => { setRenaming(null); setActiveChatIdRaw(id); };
   const [composerType, setComposerType] = useState(null); // 'dm' | 'group' | null
   const [picked, setPicked] = useState([]);
   const [groupName, setGroupName] = useState('');
@@ -50,18 +72,34 @@ export default function ChatScreen() {
 
   const activeChat = chats.find(c => c.id === activeChatId);
   if (activeChat) {
-    const others = activeChat.participantIds.filter(id => id !== asIdLive).map(playerName);
-    const title = activeChat.type === 'group' ? (activeChat.name || others.join(', ')) : (others[0] || 'Chat');
+    const title = titleOf(activeChat);
     const dmWith = activeChat.type === 'dm' ? players.find(p => activeChat.participantIds.includes(p.id) && p.id !== asIdLive) : null;
+    const chatEvent = activeChat.eventId ? eventById(activeChat.eventId) : null;
+    function saveName() { renameChat(activeChat.id, renaming); setRenaming(null); }
     return (
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <Screen contentStyle={{ flexGrow: 1 }}>
-          <Row style={{ borderBottomWidth: 0, paddingBottom: 12 }}>
-            <Pressable onPress={() => setActiveChatId(null)} style={styles.backBtn}>
+          <Row style={{ borderBottomWidth: 0, paddingBottom: chatEvent ? 2 : 12 }}>
+            <Pressable onPress={() => setActiveChatId(null)} style={styles.backBtn} accessibilityRole="button" accessibilityLabel="Back to conversations">
               <Ionicons name="chevron-back" size={18} color={colors.slate} />
             </Pressable>
-            <Text style={styles.threadTitle}>{title}</Text>
+            {renaming !== null ? (
+              <>
+                <TextInput
+                  value={renaming} onChangeText={setRenaming} placeholder="Group name" style={styles.composerInput}
+                  autoFocus onSubmitEditing={saveName} returnKeyType="done"
+                />
+                <Btn title="Save" small onPress={saveName} />
+                <Btn title="Cancel" variant="ghost" small onPress={() => setRenaming(null)} />
+              </>
+            ) : (
+              <>
+                <Text style={[styles.threadTitle, { flex: 1 }]} numberOfLines={2}>{title}</Text>
+                {activeChat.type === 'group' ? <IconBtn icon="create-outline" label="Rename this group" onPress={() => setRenaming(title)} /> : null}
+              </>
+            )}
           </Row>
+          {chatEvent ? <Hint style={{ marginTop: 0, marginBottom: 10 }}>Everyone in {chatEvent.name}.</Hint> : null}
           <Card style={{ minHeight: 220 }}>
             {activeChat.messages.length === 0 ? (
               <EmptyState icon="chatbubble-ellipses">No messages yet — say hello.</EmptyState>
@@ -102,9 +140,9 @@ export default function ChatScreen() {
     setComposerType(null); setPicked([]); setGroupName('');
   }
 
-  // Only people with an account can read and reply, so only they're offered —
-  // and a 1:1 chat only with your friends.
-  const others = players.filter(p => p.claimed && p.id !== asIdLive && (composerType !== 'dm' || friendIds.has(p.id)));
+  // You start 1:1 and group chats with friends only (an event's own group
+  // chat is the one way to chat with players who aren't your friends).
+  const others = players.filter(p => p.claimed && p.id !== asIdLive && friendIds.has(p.id));
 
   return (
     <Screen>
@@ -115,13 +153,12 @@ export default function ChatScreen() {
       ) : (
         <Card>
           {chats.map(c => {
-            const chatOthers = c.participantIds.filter(id => id !== asIdLive).map(playerName);
-            const label = c.type === 'group' ? (c.name || chatOthers.join(', ')) : (chatOthers[0] || '—');
+            const label = titleOf(c);
             const last = c.messages[c.messages.length - 1];
             const otherId = c.participantIds.find(id => id !== asIdLive);
             return (
-              <Row key={c.id} onPress={() => setActiveChatId(c.id)}>
-                {c.type === 'group' ? <Ionicons name="people" size={18} color={colors.slate} /> : null}
+              <Row key={c.id} onPress={() => openChat(c)}>
+                {c.type === 'group' ? <Ionicons name={c.eventId ? 'calendar' : 'people'} size={18} color={colors.slate} /> : null}
                 <View style={styles.convLabelRow}>
                   <Text style={styles.convLabel} numberOfLines={1}>{label}</Text>
                   {c.type === 'group' ? null : <GenderDot gender={playerGender(otherId)} />}
@@ -148,7 +185,7 @@ export default function ChatScreen() {
             <Text style={[styles.hintLabel, { marginTop: composerType === 'group' ? 10 : 0 }]}>With</Text>
             <View style={styles.pillRow}>
               {others.length === 0 ? (
-                <Text style={styles.emptyText}>{composerType === 'dm' ? 'You can message friends one-on-one. Add friends from the Players tab.' : 'No one else has an account yet.'}</Text>
+                <Text style={styles.emptyText}>You can start chats with your friends. Send friend requests from the Players tab.</Text>
               ) : others.map(p => {
                 const isPicked = picked.includes(p.id);
                 return (

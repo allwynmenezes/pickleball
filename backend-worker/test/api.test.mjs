@@ -10,6 +10,7 @@
 
    Never point it at the live Worker: it writes test players and events. */
 import assert from 'node:assert/strict';
+import { extractFromText } from '../src/eventParse.js';
 
 const base = (process.env.BASE_URL || 'http://127.0.0.1:8787').replace(/\/+$/, '');
 let failures = 0;
@@ -31,8 +32,8 @@ const event = {
   roster: [{ offset: 0, played: true, sitOut: [], courts: [{ court: 1, mode: 'open', flagged: false, teamA: ['p1', 'p2'], teamB: ['p3', 'p4'], scoreA: 11, scoreB: 7 }] }],
   noShows: [], currentRoundIndex: 0, published: true, memberIds: players.map(p => p.id),
 };
-// A group chat: a new 1:1 chat is only accepted between friends (checked below).
-const chats = [{ id: 'c1', type: 'group', name: 'Tuesday crew', participantIds: ['p1', 'p2', 'p3'], messages: [{ id: 'm1', senderId: 'p1', text: 'See you at 6!', ts: 1700000001000 }] }];
+// No chats: a new chat needs a signed-in sender (checked with friends, below).
+const chats = [];
 const history = { 'p1|p2': { partner: 1, opponent: 0 } };
 const withClaimed = ps => ps.map(p => ({ ...p, claimed: false }));
 
@@ -52,9 +53,15 @@ check('PUT rejects malformed state', () => assert.equal(res.status, 400));
 const sample = { players, events: [event], chats, history, flagThreshold: 4, currentEventId: 'ev1' };
 res = await put('/api/state', sample);
 body = await res.json();
-check('PUT round-trips a realistic snapshot', () => {
+check('PUT round-trips a realistic snapshot (the server stamps each score)', () => {
   assert.equal(res.status, 200);
-  assert.deepEqual(body, { ...sample, players: withClaimed(players) });
+  const scored = body.events[0].roster[0].courts[0];
+  assert.ok(Number.isFinite(scored.scoredAt));
+  assert.equal(scored.scoredBy, null);
+  const unstamped = JSON.parse(JSON.stringify(body));
+  delete unstamped.events[0].roster[0].courts[0].scoredAt;
+  delete unstamped.events[0].roster[0].courts[0].scoredBy;
+  assert.deepEqual(unstamped, { ...sample, players: withClaimed(players) });
 });
 
 res = await post('/api/players/p1/claim-link');
@@ -160,7 +167,8 @@ check("a non-host can't change the event's setup (or its host)", () => {
   assert.equal(hostedNow.courts, 1);
   assert.equal(hostedNow.createdBy, 'p1');
 });
-check('…but can still RSVP', () => assert.equal(hostedNow.rsvps.p2.status, 'in'));
+// Players change only their own RSVP (a signed-in player RSVPing is checked below).
+check("…nor someone else's RSVP", () => assert.equal((hostedNow.rsvps || {}).p2, undefined));
 
 body = await (await putAs(null, { ...body, events: body.events.filter(e => e.id !== 'ev-host') })).json();
 check("a non-host can't delete the event", () => assert.ok(body.events.some(e => e.id === 'ev-host')));
@@ -182,49 +190,94 @@ res = await post('/api/ai/parse-event', { text: 'Tuesday 6 to 9pm, 2 courts' });
 check('describing an event needs a signed-in player', () => assert.equal(res.status, 401));
 res = await post('/api/ai/parse-event', { text: ' ' }, { Authorization: `Bearer ${zedToken}` });
 check('an empty description is refused', () => assert.equal(res.status, 400));
-res = await post('/api/ai/parse-event', { text: 'Tuesday 6 to 9pm, 2 courts, with Ben', now: '2026-09-26T17:00:00.000Z', tzOffsetMin: -420 }, { Authorization: `Bearer ${zedToken}` });
+// The server only trusts the phone's clock within a day of its own, so send
+// the real time; "Tuesday" is the next Tuesday from the phone's local date.
+const describedAt = new Date().toISOString();
+const nextTuesday = extractFromText('Tuesday 6 to 9pm', { now: describedAt, tzOffsetMin: -420 }).date;
+res = await post('/api/ai/parse-event', { text: 'Tuesday 6 to 9pm, 2 courts, with Ben', now: describedAt, tzOffsetMin: -420 }, { Authorization: `Bearer ${zedToken}` });
 body = await res.json();
 check('a description comes back as a draft', () => {
   assert.equal(res.status, 200);
-  assert.deepEqual([body.draft.date, body.draft.startTime, body.draft.durationMin, body.draft.courts], ['2026-09-29', '18:00', 180, 2]);
+  assert.equal(new Date(`${nextTuesday}T12:00:00Z`).getUTCDay(), 2);
+  assert.deepEqual([body.draft.date, body.draft.startTime, body.draft.durationMin, body.draft.courts], [nextTuesday, '18:00', 180, 2]);
 });
 console.log(`        (model ${body.aiUsed ? 'answered' : 'unavailable — code parsing only'}${body.aiUsed ? `; players matched: ${body.draft.memberIds.join(', ') || 'none'}` : ''})`);
 
-/* Friends and "visible in search" (src/social.js). Ava is p1. */
+/* Friends, requests, notifications, "visible in search" (src/social.js). Ava is p1. */
 const as = token => ({ Authorization: `Bearer ${token}` });
+const social = async token => (await fetch(`${base}/api/me/social`, { headers: as(token) })).json();
+const act = (token, path) => post(path, {}, as(token));
 const zedId = (await (await fetch(`${base}/api/auth/me`, { headers: as(zedToken) })).json()).player.id;
+const ids = list => list.map(x => x.id);
 res = await fetch(`${base}/api/me/social`);
 check('friends need a signed-in account', () => assert.equal(res.status, 401));
-body = await (await fetch(`${base}/api/me/social`, { headers: as(ava.token) })).json();
-check('an account starts hidden from search, with no friends', () => assert.deepEqual(body, { searchable: false, friends: [], cooldowns: [] }));
-await fetch(`${base}/api/me/social`, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...as(zedToken) }, body: JSON.stringify({ searchable: true }) });
+body = await social(ava.token);
+check('an account starts visible in search, with no friends or requests', () => {
+  assert.deepEqual(body, { searchable: true, friends: [], incoming: [], outgoing: [], waits: [], notifications: [] });
+});
+await fetch(`${base}/api/me/social`, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...as(zedToken) }, body: JSON.stringify({ searchable: false }) });
 body = await (await fetch(`${base}/api/state`)).json();
-check('opting in marks only that player searchable in the shared state', () => {
-  assert.equal(body.players.find(p => p.id === zedId).searchable, true);
-  assert.equal(body.players.find(p => p.id === 'p1').searchable, undefined);
+check('turning visibility off hides only that player', () => {
+  assert.equal(body.players.find(p => p.id === zedId).searchable, undefined);
+  assert.equal(body.players.find(p => p.id === 'p1').searchable, true);
 });
-res = await post('/api/friends/p3', {}, as(ava.token));
-check("a player without an account can't be added as a friend", () => assert.equal(res.status, 404));
-res = await post('/api/friends/p1', {}, as(ava.token));
+res = await act(ava.token, '/api/friends/p3');
+check("a player without an account can't be sent a request", () => assert.equal(res.status, 404));
+res = await act(ava.token, '/api/friends/p1');
 check("you can't add yourself", () => assert.equal(res.status, 400));
-body = await (await post(`/api/friends/${zedId}`, {}, as(ava.token))).json();
-check('adding a friend lists them', () => assert.deepEqual(body.friends.map(f => f.id), [zedId]));
-body = await (await fetch(`${base}/api/me/social`, { headers: as(zedToken) })).json();
-check('friendship is one-way', () => assert.deepEqual(body.friends, []));
-const before = await (await fetch(`${base}/api/state`)).json();
-const dmChat = { id: 'dm-az', type: 'dm', name: '', participantIds: ['p1', zedId], messages: [] };
-body = await (await putAs(zedToken, { ...before, chats: [...before.chats, dmChat] })).json();
-check("a new 1:1 chat with someone who isn't your friend is refused", () => assert.ok(!body.chats.some(c => c.id === 'dm-az')));
-body = await (await putAs(ava.token, { ...before, chats: [...before.chats, dmChat] })).json();
-check('a new 1:1 chat with a friend is saved', () => assert.ok(body.chats.some(c => c.id === 'dm-az')));
-body = await (await post(`/api/friends/${zedId}/remove`, {}, as(ava.token))).json();
-check('unfriending removes them and starts a 24-hour wait', () => {
-  assert.deepEqual(body.friends, []);
-  assert.equal(body.cooldowns[0].id, zedId);
-  assert.ok(body.cooldowns[0].until > Date.now() + 23.9 * 3600e3);
+body = await (await act(ava.token, `/api/friends/${zedId}`)).json();
+check('a request shows as sent, not as a friend yet', () => { assert.deepEqual(ids(body.outgoing), [zedId]); assert.deepEqual(body.friends, []); });
+body = await social(zedToken);
+check('the other player sees it as a request', () => assert.deepEqual(ids(body.incoming), ['p1']));
+body = await (await act(zedToken, '/api/friends/p1/decline')).json();
+check('declining clears the request', () => assert.deepEqual(body.incoming, []));
+body = await social(ava.token);
+const declinedNote = body.notifications[0];
+check('the requester is told it was declined, and has to wait 24 hours', () => {
+  assert.deepEqual([declinedNote.type, declinedNote.otherId], ['friend_declined', zedId]);
+  assert.deepEqual(body.outgoing, []);
+  assert.equal(body.waits[0].id, zedId);
+  assert.ok(body.waits[0].until > Date.now() + 23.9 * 3600e3);
 });
-res = await post(`/api/friends/${zedId}`, {}, as(ava.token));
-check("they can't be added back within 24 hours", () => assert.equal(res.status, 429));
+res = await act(ava.token, `/api/friends/${zedId}`);
+check("they can't ask again within 24 hours of the decline", () => assert.equal(res.status, 429));
+body = await (await act(ava.token, `/api/notifications/${declinedNote.id}/dismiss`)).json();
+check('dismissing a notification clears it', () => assert.deepEqual(body.notifications, []));
+await act(zedToken, '/api/friends/p1');
+body = await (await act(ava.token, `/api/friends/${zedId}/accept`)).json();
+check('accepting makes them friends', () => { assert.deepEqual(ids(body.friends), [zedId]); assert.deepEqual(body.incoming, []); });
+body = await social(zedToken);
+check('…on both sides, and the requester is told it was accepted', () => {
+  assert.deepEqual(ids(body.friends), ['p1']);
+  assert.deepEqual(body.outgoing, []);
+  assert.deepEqual([body.notifications[0].type, body.notifications[0].otherId], ['friend_accepted', 'p1']);
+});
+
+let before = await (await fetch(`${base}/api/state`)).json();
+const dmChat = { id: 'dm-az', type: 'dm', name: '', participantIds: ['p1', zedId], messages: [] };
+const groupWithStranger = { id: 'g-az', type: 'group', name: 'Crew', participantIds: ['p1', zedId, 'p2'], messages: [] };
+body = await (await putAs(null, { ...before, chats: [...before.chats, dmChat] })).json();
+check('a new chat sent signed out is refused', () => assert.ok(!body.chats.some(c => c.id === 'dm-az')));
+body = await (await putAs(zedToken, { ...before, chats: [...before.chats, dmChat, groupWithStranger] })).json();
+check('a new 1:1 chat with a friend is saved', () => assert.ok(body.chats.some(c => c.id === 'dm-az')));
+check('a new group chat with someone who isn\'t a friend is refused', () => assert.ok(!body.chats.some(c => c.id === 'g-az')));
+before = body;
+const chatEvent = { id: 'ev-chat', name: 'Chat Night', date: '2026-10-10', createdBy: 'p1', memberIds: ['p1', 'p2', 'p3'], groupChat: true, rsvps: {} };
+const evChat = { id: 'event-ev-chat', type: 'group', eventId: 'ev-chat', name: '', participantIds: ['p1', 'p2', 'p3'], messages: [] };
+body = await (await putAs(ava.token, { ...before, events: [...before.events, chatEvent], chats: [...before.chats, evChat] })).json();
+check("the host can make an event's group chat with players who aren't friends", () => assert.ok(body.chats.some(c => c.id === 'event-ev-chat')));
+check('the group chat setting is saved on the event', () => assert.equal(body.events.find(e => e.id === 'ev-chat').groupChat, true));
+const rsvpd = body.events.map(e => (e.id === 'ev-chat' ? { ...e, rsvps: { ...e.rsvps, [zedId]: { status: 'in', start: 0, end: 120, ts: 1 } }, groupChat: false } : e));
+body = await (await putAs(zedToken, { ...body, events: rsvpd })).json();
+check('a player who isn\'t the host can RSVP', () => assert.equal(body.events.find(e => e.id === 'ev-chat').rsvps[zedId].status, 'in'));
+check("…but can't turn the event's group chat off", () => assert.equal(body.events.find(e => e.id === 'ev-chat').groupChat, true));
+
+body = await (await act(ava.token, `/api/friends/${zedId}/remove`)).json();
+check('unfriending removes them and starts a 24-hour wait', () => { assert.deepEqual(body.friends, []); assert.deepEqual(ids(body.waits), [zedId]); });
+body = await social(zedToken);
+check('…on both sides', () => assert.deepEqual(body.friends, []));
+res = await act(ava.token, `/api/friends/${zedId}`);
+check("they can't be sent a request within 24 hours", () => assert.equal(res.status, 429));
 
 res = await post('/api/admin/import', {}, { 'X-Migration-Token': 'anything' });
 check('import endpoint is hidden without MIGRATION_TOKEN', () => assert.equal(res.status, 404));

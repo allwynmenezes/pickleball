@@ -5,7 +5,7 @@
    setup can only be changed — or the event deleted — by its host. D1's
    batch() runs the whole write as a single transaction. */
 import { json, err, readJson, sha256 } from './util.js';
-import { enforceFriendDms, activeFriendIds } from './social.js';
+import { enforceNewChats, activeFriendIds } from './social.js';
 
 /* The Setup step's fields. Only the event's host (createdBy) may change
    them; for anyone else the stored values win. Everything else on an event
@@ -15,7 +15,9 @@ const HOST_ONLY_FIELDS = ['name', 'date', 'startTime', 'durationMin', 'courts', 
   'published', 'started', 'startedAt', 'currentRoundIndex',
   // Playoffs (players may still score their own match — mergePlayoffs) and
   // which series the event belongs to.
-  'playoffs', 'seriesId'];
+  'playoffs', 'seriesId',
+  // "Create a group chat for this event".
+  'groupChat'];
 
 export async function requesterId(request, db) {
   const [scheme, token] = (request.headers.get('Authorization') || '').split(' ');
@@ -226,7 +228,7 @@ export function defaultState() {
 
 export async function readState(db) {
   const [players, events, chats, history, config] = await db.batch([
-    db.prepare(`SELECT p.id, p.name, p.gender, p.dupr, (p.email IS NOT NULL) AS claimed, COALESCE(s.searchable, 0) AS searchable
+    db.prepare(`SELECT p.id, p.name, p.gender, p.dupr, (p.email IS NOT NULL) AS claimed, COALESCE(s.searchable, 1) AS searchable
       FROM players p LEFT JOIN player_settings s ON s.playerId = p.id`),
     db.prepare('SELECT id, data FROM events'),
     db.prepare('SELECT id, data FROM chats'),
@@ -284,9 +286,9 @@ export async function putState(request, env) {
   const storedEvents = (await db.prepare('SELECT id, data FROM events').all()).results.map(r => ({ id: r.id, ...JSON.parse(r.data) }));
   const requester = await requesterId(request, db);
   state.events = enforceEventHosts(state.events, storedEvents, requester);
-  // A new 1:1 chat is only accepted between friends.
+  // New chats: 1:1 and group only with friends; an event's chat only by its players.
   const storedChatIds = new Set((await db.prepare('SELECT id FROM chats').all()).results.map(r => r.id));
-  state.chats = enforceFriendDms(state.chats || [], storedChatIds, requester, await activeFriendIds(db, requester));
+  state.chats = enforceNewChats(state.chats || [], storedChatIds, requester, await activeFriendIds(db, requester), state.events);
   const stmts = [
     ...await replaceRowsStatements(db, 'players', state.players, ['name', 'gender', 'dupr'], p => [p.name, p.gender, duprOf(p)], 'email IS NOT NULL'),
     ...await replaceRowsStatements(db, 'events', state.events, ['data'], e => { const { id, ...rest } = e; return [JSON.stringify(rest)]; }),

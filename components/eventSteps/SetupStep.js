@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { SectionTitle, Card, Field, TextField, DateField, Hint, Btn, Row, GenderChip, DuprChip, EmptyState, Select, Pill } from '../../lib/ui';
+import { SectionTitle, Card, Field, TextField, DateField, Hint, Btn, Row, GenderChip, DuprChip, EmptyState, Select, Pill, Checkbox } from '../../lib/ui';
 import { TimeWheelField, WheelSelectField } from '../WheelPicker';
 import { showAlert, showConfirm } from '../../lib/confirm';
 import {
@@ -96,6 +96,8 @@ export default function SetupStep({ ev, onDeleteEvent, canEdit, editing }) {
         <Text style={styles.duration}>Duration: {fmtDuration(ev.durationMin)}</Text>
         <NumberField label="Game length (min per round)" ev={ev} field="gameLenMin" value={gameLen(ev)} />
         <Hint style={{ marginTop: 0 }}>Capacity is {playerCapacity(ev) === Infinity ? 'unlimited (extra players sit out in turns)' : `${playerCapacity(ev)} players (courts × ${perCourt(ev)})`}. Each round is {gameLen(ev)} min unless a segment below sets its own game length; the first game doubles as warm-up.</Hint>
+        <Checkbox label="Create a group chat for this event." checked={!!ev.groupChat} onChange={(v) => updateEventField(ev, 'groupChat', v)} />
+        {ev.groupChat ? <Hint style={{ marginTop: -4 }}>Everyone in the event is in it, friends or not, including players added later. It's named after the event and its date — anyone in it can rename it on the Chat tab.</Hint> : null}
         <Btn title="Delete event" icon="trash" variant="ghost" small dangerText onPress={onDeleteEvent} style={{ alignSelf: 'flex-end' }} />
       </Card>
 

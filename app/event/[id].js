@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Platform, InteractionManager, Pressable } from 
 import { Ionicons } from '@expo/vector-icons';
 import PagerView from '../../components/StepPager';
 import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
-import { Screen, Card, Btn, TextField, DateField } from '../../lib/ui';
+import { Screen, Card, Btn, TextField, DateField, Checkbox } from '../../lib/ui';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import StepIndicator from '../../components/StepIndicator';
 import { TimeWheelField } from '../../components/WheelPicker';
@@ -182,6 +182,7 @@ export default function EventFlowScreen() {
               <TextField label="Game length (min)" value={draft.gameLenMin} onChangeText={(v) => setDraft({ ...draft, gameLenMin: v })} keyboardType="number-pad" />
               <View style={{ flex: 1 }} />
             </View>
+            <Checkbox label="Create a group chat for this event." checked={!!draft.groupChat} onChange={(v) => setDraft({ ...draft, groupChat: v })} />
             <View style={styles.pillRow}>
               <Btn title="Create event" onPress={submitDraft} />
               <Btn title="Cancel" variant="ghost" onPress={cancelDraft} />

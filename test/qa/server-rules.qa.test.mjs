@@ -123,10 +123,11 @@ check('a player can\'t start or remove playoffs; the host can', () => {
 console.log('QA 6 · backend/state.js mirrors the Worker');
 check('the rule functions are identical in backend/state.js and backend-worker/src/state.js', () => {
   const grab = (src, name) => { const i = src.indexOf(`function ${name}(`); assert.ok(i >= 0, `${name} missing`); const j = src.indexOf('\n}\n', i); return src.slice(i, j).replace(/\s+/g, ' '); };
-  const w = readFileSync(new URL('../../backend-worker/src/state.js', import.meta.url), 'utf8');
-  const n = readFileSync(new URL('../../backend/state.js', import.meta.url), 'utf8');
+  // Line endings normalised: a Windows checkout may have CRLF.
+  const w = readFileSync(new URL('../../backend-worker/src/state.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
+  const n = readFileSync(new URL('../../backend/state.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
   for (const f of ['mergeScore', 'mergeHostRoster', 'mergeRosterForPlayer', 'resolvePlayoffTeams', 'mergePlayoffs', 'enforceEventHosts']) assert.equal(grab(n, f), grab(w, f), f);
-  const fields = s => s.slice(s.indexOf('HOST_ONLY_FIELDS = ['), s.indexOf("'seriesId']") + 12).replace(/\s+/g, ' ');
+  const fields = (s) => { const i = s.indexOf('HOST_ONLY_FIELDS = ['); assert.ok(i >= 0, 'HOST_ONLY_FIELDS missing'); return s.slice(i, s.indexOf('];', i) + 2).replace(/\s+/g, ' '); };
   assert.equal(fields(n), fields(w));
 });
 

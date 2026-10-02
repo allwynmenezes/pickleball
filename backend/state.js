@@ -16,7 +16,9 @@ const HOST_ONLY_FIELDS = ['name', 'date', 'startTime', 'durationMin', 'courts', 
   'published', 'started', 'startedAt', 'currentRoundIndex',
   // Playoffs (players may still score their own match — mergePlayoffs) and
   // which series the event belongs to.
-  'playoffs', 'seriesId'];
+  'playoffs', 'seriesId',
+  // "Create a group chat for this event".
+  'groupChat'];
 
 /* Scores. The server stamps each accepted score (scoredAt, scoredBy); the
    phone's clock is never trusted. A phone sends baseAt — the stamp of the

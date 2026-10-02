@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, usePathname } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSocial, useSocialSync } from '../lib/social';
 import { colors } from '../lib/theme';
 
 /* Brand gradient runs Purple → Lavender, left (dark) to right (light), so
@@ -13,6 +14,8 @@ export default function AppHeader() {
   const router = useRouter();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
+  useSocialSync();
+  const { badge } = useSocial();
   return (
     <LinearGradient
       colors={[colors.courtDeep, colors.court, colors.courtTint]}
@@ -31,9 +34,19 @@ export default function AppHeader() {
       {/* navigate (not push): if Profile is already open underneath — e.g.
           you went Profile → Log in — this returns to it instead of stacking
           a second copy. */}
-      <Pressable onPress={() => { if (pathname !== '/profile') router.navigate('/profile'); }} style={styles.profileBtn}>
-        <Ionicons name="person" size={18} color={colors.courtDeep} />
-      </Pressable>
+      <View style={styles.actions}>
+        {/* Friend requests and their answers. */}
+        <Pressable
+          onPress={() => { if (pathname !== '/notifications') router.navigate('/notifications'); }} style={styles.profileBtn}
+          accessibilityRole="button" accessibilityLabel={badge ? `Notifications, ${badge} new` : 'Notifications'}
+        >
+          <Ionicons name="notifications" size={18} color={colors.courtDeep} />
+          {badge ? <View style={styles.badge}><Text style={styles.badgeText}>{badge > 9 ? '9+' : badge}</Text></View> : null}
+        </Pressable>
+        <Pressable onPress={() => { if (pathname !== '/profile') router.navigate('/profile'); }} style={styles.profileBtn} accessibilityRole="button" accessibilityLabel="Profile">
+          <Ionicons name="person" size={18} color={colors.courtDeep} />
+        </Pressable>
+      </View>
     </LinearGradient>
   );
 }
@@ -48,8 +61,14 @@ const styles = StyleSheet.create({
   markPill: { position: 'absolute', left: 0, top: 2, width: 15, height: 22, borderRadius: 7.5, backgroundColor: colors.ball },
   markDot: { position: 'absolute', right: 0, bottom: 0, width: 9, height: 9, borderRadius: 4.5, backgroundColor: colors.white, borderWidth: 1.2, borderColor: colors.courtDeep },
   word: { fontWeight: '700', fontSize: 21, letterSpacing: 0.5, color: colors.white },
+  actions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   profileBtn: {
     width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(255,255,255,0.92)',
     alignItems: 'center', justifyContent: 'center',
   },
+  badge: {
+    position: 'absolute', top: -4, right: -4, minWidth: 17, height: 17, borderRadius: 9, paddingHorizontal: 4,
+    backgroundColor: colors.clay, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: colors.white,
+  },
+  badgeText: { color: colors.white, fontSize: 10, fontWeight: '700' },
 });

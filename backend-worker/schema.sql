@@ -66,16 +66,16 @@ CREATE TABLE IF NOT EXISTS ai_calls (
 CREATE INDEX IF NOT EXISTS idx_ai_calls_player_ts ON ai_calls(playerId, ts);
 CREATE INDEX IF NOT EXISTS idx_ai_calls_ts ON ai_calls(ts);
 
--- Whether a player is listed on everyone's Players tab (they opt in from
--- their profile). Only the player themselves can change it (src/social.js).
+-- Whether a player is listed on everyone's Players tab. On unless they turn
+-- it off in their profile (no row = on). Only the player themselves can
+-- change it (src/social.js).
 CREATE TABLE IF NOT EXISTS player_settings (
   playerId TEXT PRIMARY KEY,
-  searchable INTEGER NOT NULL DEFAULT 0
+  searchable INTEGER NOT NULL DEFAULT 1
 );
 
--- One row per (player, friend), one-way: playerId added friendId. Unfriending
--- sets removedAt instead of deleting, so the 24-hour wait before adding the
--- same player again can be enforced.
+-- Friends are mutual: accepting a request adds a row each way. Unfriending
+-- sets removedAt on both.
 CREATE TABLE IF NOT EXISTS friendships (
   playerId TEXT NOT NULL,
   friendId TEXT NOT NULL,
@@ -83,3 +83,36 @@ CREATE TABLE IF NOT EXISTS friendships (
   removedAt INTEGER,
   PRIMARY KEY (playerId, friendId)
 );
+
+-- Friend requests: status pending → accepted | declined.
+CREATE TABLE IF NOT EXISTS friend_requests (
+  id TEXT PRIMARY KEY,
+  fromId TEXT NOT NULL,
+  toId TEXT NOT NULL,
+  createdAt INTEGER NOT NULL,
+  status TEXT NOT NULL,
+  respondedAt INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_friend_requests_to ON friend_requests(toId, status);
+CREATE INDEX IF NOT EXISTS idx_friend_requests_from ON friend_requests(fromId, status);
+
+-- playerId can't send otherId a friend request before `until`: 24 hours
+-- after unfriending them, or after otherId declined playerId's request.
+CREATE TABLE IF NOT EXISTS friend_waits (
+  playerId TEXT NOT NULL,
+  otherId TEXT NOT NULL,
+  until INTEGER NOT NULL,
+  PRIMARY KEY (playerId, otherId)
+);
+
+-- Notices for playerId: 'friend_accepted' / 'friend_declined' (otherId
+-- answered their request). Dismissed ones stay, with dismissedAt set.
+CREATE TABLE IF NOT EXISTS notifications (
+  id TEXT PRIMARY KEY,
+  playerId TEXT NOT NULL,
+  type TEXT NOT NULL,
+  otherId TEXT,
+  createdAt INTEGER NOT NULL,
+  dismissedAt INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_notifications_player ON notifications(playerId, dismissedAt);
